@@ -1,0 +1,50 @@
+name: Bug report
+description: Report a reproducible problem with Copilot Goal System.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include commands, hook payloads, or Copilot actions.
+      placeholder: |
+        1. Install with ./install.sh
+        2. Start Copilot CLI
+        3. Run /goal ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      placeholder: "node --version"
+  - type: input
+    id: copilot
+    attributes:
+      label: Copilot CLI version
+      placeholder: "copilot --version"
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      description: Redact tokens, personal data, private paths, and prompt content before posting.
