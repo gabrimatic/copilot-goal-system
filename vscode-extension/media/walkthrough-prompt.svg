@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" role="img" aria-label="Runtime goal prompt">
+  <rect width="640" height="360" rx="24" fill="#1f2430"/>
+  <path d="M86 90h468v180H86z" fill="#111722" stroke="#42526a" stroke-width="2"/>
+  <path d="M126 138h78M126 178h250M126 218h184" stroke="#f8f6ef" stroke-width="16" stroke-linecap="round"/>
+  <path d="M432 124l52 52-52 52" fill="none" stroke="#35d0ba" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="486" cy="176" r="14" fill="#f4c95d"/>
+</svg>

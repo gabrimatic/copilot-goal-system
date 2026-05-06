@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" role="img" aria-label="Goal system status">
+  <rect width="640" height="360" rx="24" fill="#10232f"/>
+  <rect x="76" y="58" width="488" height="244" rx="14" fill="#f8f6ef"/>
+  <path d="M126 116h122M126 168h196M126 220h158" stroke="#10232f" stroke-width="16" stroke-linecap="round"/>
+  <circle cx="456" cy="116" r="24" fill="#35d0ba"/>
+  <circle cx="456" cy="168" r="24" fill="#35d0ba"/>
+  <circle cx="456" cy="220" r="24" fill="#f4c95d"/>
+  <path d="M445 116l8 8 16-20M445 168l8 8 16-20" fill="none" stroke="#10232f" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M456 209v14" stroke="#10232f" stroke-width="7" stroke-linecap="round"/>
+</svg>

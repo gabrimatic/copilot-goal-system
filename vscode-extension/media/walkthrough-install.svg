@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" role="img" aria-label="Install goal system">
+  <rect width="640" height="360" rx="24" fill="#0f2a2a"/>
+  <rect x="62" y="64" width="516" height="232" rx="14" fill="#173737" stroke="#2f6762" stroke-width="2"/>
+  <circle cx="98" cy="96" r="8" fill="#f06449"/>
+  <circle cx="124" cy="96" r="8" fill="#f4c95d"/>
+  <circle cx="150" cy="96" r="8" fill="#35d0ba"/>
+  <path d="M104 145h186M104 184h286M104 223h226" stroke="#f8f6ef" stroke-width="18" stroke-linecap="round"/>
+  <path d="M426 150l38 38 80-86" fill="none" stroke="#35d0ba" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

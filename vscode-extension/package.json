@@ -1,0 +1,172 @@
+{
+  "name": "copilot-goal-system",
+  "displayName": "Copilot Goal System",
+  "description": "Install and manage persisted goal mode for GitHub Copilot CLI.",
+  "version": "1.0.0",
+  "publisher": "gabrimatic",
+  "license": "SEE LICENSE IN LICENSE",
+  "pricing": "Free",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#0f2a2a",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gabrimatic/copilot-goal-system.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gabrimatic/copilot-goal-system/issues"
+  },
+  "homepage": "https://github.com/gabrimatic/copilot-goal-system#readme",
+  "files": [
+    "extension.cjs",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "package.json",
+    "media/**",
+    "resources/**"
+  ],
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "copilot",
+    "github-copilot",
+    "goal",
+    "workflow",
+    "persistence",
+    "hooks",
+    "skills",
+    "verification"
+  ],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "extensionKind": [
+    "ui"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": false
+  },
+  "activationEvents": [
+    "onCommand:copilotGoalSystem.install",
+    "onCommand:copilotGoalSystem.status",
+    "onCommand:copilotGoalSystem.copyPrompt",
+    "onCommand:copilotGoalSystem.openDocs",
+    "onCommand:copilotGoalSystem.openInstalledFiles",
+    "onCommand:copilotGoalSystem.openStateFolder"
+  ],
+  "main": "./extension.cjs",
+  "contributes": {
+    "commands": [
+      {
+        "command": "copilotGoalSystem.install",
+        "title": "Install or Update Goal System",
+        "category": "Copilot Goal System"
+      },
+      {
+        "command": "copilotGoalSystem.status",
+        "title": "Show Install Status",
+        "category": "Copilot Goal System"
+      },
+      {
+        "command": "copilotGoalSystem.copyPrompt",
+        "title": "Copy Runtime E2E Prompt",
+        "category": "Copilot Goal System"
+      },
+      {
+        "command": "copilotGoalSystem.openDocs",
+        "title": "Open Documentation",
+        "category": "Copilot Goal System"
+      },
+      {
+        "command": "copilotGoalSystem.openInstalledFiles",
+        "title": "Open Installed Files",
+        "category": "Copilot Goal System"
+      },
+      {
+        "command": "copilotGoalSystem.openStateFolder",
+        "title": "Open Goal State Folder",
+        "category": "Copilot Goal System"
+      }
+    ],
+    "configuration": {
+      "title": "Copilot Goal System",
+      "properties": {
+        "copilotGoalSystem.homeOverride": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Optional home directory override for install and status commands. Leave empty to use the current OS user home."
+        },
+        "copilotGoalSystem.showStatusAfterInstall": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show an install status report after installing or updating the goal system."
+        }
+      }
+    },
+    "walkthroughs": [
+      {
+        "id": "copilotGoalSystem.setup",
+        "title": "Set Up Copilot Goal System",
+        "description": "Install persisted goal mode for GitHub Copilot CLI and verify the local setup.",
+        "steps": [
+          {
+            "id": "install",
+            "title": "Install or update the local goal system",
+            "description": "Run the install command to copy the bundled goal system into your local Copilot CLI profile, install production dependencies, merge hooks, and add the goal skill.",
+            "media": {
+              "image": "media/walkthrough-install.svg",
+              "altText": "Goal system install flow"
+            },
+            "completionEvents": [
+              "onCommand:copilotGoalSystem.install"
+            ]
+          },
+          {
+            "id": "status",
+            "title": "Check installation status",
+            "description": "Run the status command to confirm the extension files, skill, hook helper, dependency install, and hook settings are present.",
+            "media": {
+              "image": "media/walkthrough-status.svg",
+              "altText": "Goal system status checks"
+            },
+            "completionEvents": [
+              "onCommand:copilotGoalSystem.status"
+            ]
+          },
+          {
+            "id": "try",
+            "title": "Try a real goal",
+            "description": "Copy the runtime E2E prompt, paste it into Copilot CLI, and confirm the goal system forces inspect, fix, update, verify, and close behavior.",
+            "media": {
+              "image": "media/walkthrough-prompt.svg",
+              "altText": "Runtime goal prompt"
+            },
+            "completionEvents": [
+              "onCommand:copilotGoalSystem.copyPrompt"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "qna": "https://github.com/gabrimatic/copilot-goal-system/issues",
+  "markdown": "github",
+  "scripts": {
+    "vscode:prepublish": "node scripts/prepare-bundle.mjs",
+    "prepare:bundle": "node scripts/prepare-bundle.mjs",
+    "check": "node --check extension.cjs && node --check scripts/prepare-bundle.mjs",
+    "package": "node -e \"require('fs').mkdirSync('../dist',{recursive:true})\" && vsce package --out ../dist/copilot-goal-system-1.0.0.vsix",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.9.1"
+  }
+}

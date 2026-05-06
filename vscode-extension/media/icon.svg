@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Copilot Goal System icon">
+  <rect width="256" height="256" rx="48" fill="#0f2a2a"/>
+  <path d="M54 130c0-45 32-78 75-78 31 0 57 16 69 42l-31 15c-7-16-21-25-39-25-24 0-41 19-41 46s17 46 42 46c18 0 32-9 39-25l31 14c-12 27-38 43-70 43-43 0-75-33-75-78Z" fill="#f8f6ef"/>
+  <circle cx="130" cy="130" r="35" fill="none" stroke="#35d0ba" stroke-width="12"/>
+  <circle cx="130" cy="130" r="10" fill="#f4c95d"/>
+  <path d="M130 25v31M130 200v31M25 130h31M200 130h31" stroke="#f8f6ef" stroke-width="14" stroke-linecap="round"/>
+</svg>

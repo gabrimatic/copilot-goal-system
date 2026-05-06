@@ -20,3 +20,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run verify
+      - run: npm --prefix vscode-extension ci
+      - run: npm run vscode:check
+      - run: npm run vscode:package
