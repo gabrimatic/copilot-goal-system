@@ -10,3 +10,4 @@ tmp/
 *.log
 .idea/
 .vscode/
+vscode-extension/resources/

@@ -1,9 +1,13 @@
 {
   "name": "copilot-goal-system",
   "displayName": "Copilot Goal System",
-  "description": "Install and manage persisted goal mode for GitHub Copilot CLI.",
-  "version": "1.0.0",
+  "description": "One-command installer for persisted goal mode in GitHub Copilot CLI.",
+  "version": "1.0.2",
   "publisher": "gabrimatic",
+  "author": {
+    "name": "Soroush Yousefpour",
+    "url": "https://github.com/gabrimatic"
+  },
   "license": "SEE LICENSE IN LICENSE",
   "pricing": "Free",
   "icon": "media/icon.png",
@@ -23,6 +27,7 @@
     "extension.cjs",
     "README.md",
     "CHANGELOG.md",
+    "SUPPORT.md",
     "LICENSE",
     "package.json",
     "media/**",
@@ -54,8 +59,10 @@
     "virtualWorkspaces": false
   },
   "activationEvents": [
+    "onStartupFinished",
     "onCommand:copilotGoalSystem.install",
     "onCommand:copilotGoalSystem.status",
+    "onCommand:copilotGoalSystem.openWalkthrough",
     "onCommand:copilotGoalSystem.copyPrompt",
     "onCommand:copilotGoalSystem.openDocs",
     "onCommand:copilotGoalSystem.openInstalledFiles",
@@ -66,33 +73,45 @@
     "commands": [
       {
         "command": "copilotGoalSystem.install",
-        "title": "Install or Update Goal System",
-        "category": "Copilot Goal System"
+        "title": "Install into Copilot CLI",
+        "category": "Copilot Goal System",
+        "icon": "$(cloud-download)"
       },
       {
         "command": "copilotGoalSystem.status",
-        "title": "Show Install Status",
-        "category": "Copilot Goal System"
+        "title": "Show Status",
+        "category": "Copilot Goal System",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "copilotGoalSystem.openWalkthrough",
+        "title": "Open Setup Walkthrough",
+        "category": "Copilot Goal System",
+        "icon": "$(checklist)"
       },
       {
         "command": "copilotGoalSystem.copyPrompt",
-        "title": "Copy Runtime E2E Prompt",
-        "category": "Copilot Goal System"
+        "title": "Copy Test Prompt",
+        "category": "Copilot Goal System",
+        "icon": "$(copy)"
       },
       {
         "command": "copilotGoalSystem.openDocs",
         "title": "Open Documentation",
-        "category": "Copilot Goal System"
+        "category": "Copilot Goal System",
+        "icon": "$(book)"
       },
       {
         "command": "copilotGoalSystem.openInstalledFiles",
         "title": "Open Installed Files",
-        "category": "Copilot Goal System"
+        "category": "Copilot Goal System",
+        "icon": "$(folder-opened)"
       },
       {
         "command": "copilotGoalSystem.openStateFolder",
         "title": "Open Goal State Folder",
-        "category": "Copilot Goal System"
+        "category": "Copilot Goal System",
+        "icon": "$(database)"
       }
     ],
     "configuration": {
@@ -108,6 +127,16 @@
           "type": "boolean",
           "default": true,
           "description": "Show an install status report after installing or updating the goal system."
+        },
+        "copilotGoalSystem.promptOnFirstRun": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show one first-run setup prompt when the goal system is not installed into the local Copilot CLI profile."
+        },
+        "copilotGoalSystem.showStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a compact Copilot Goal System status item in the VS Code status bar."
         }
       }
     },
@@ -162,8 +191,8 @@
   "scripts": {
     "vscode:prepublish": "node scripts/prepare-bundle.mjs",
     "prepare:bundle": "node scripts/prepare-bundle.mjs",
-    "check": "node --check extension.cjs && node --check scripts/prepare-bundle.mjs",
-    "package": "node -e \"require('fs').mkdirSync('../dist',{recursive:true})\" && vsce package --out ../dist/copilot-goal-system-1.0.0.vsix",
+    "check": "node --check extension.cjs && node --check scripts/prepare-bundle.mjs && node --check scripts/package.mjs",
+    "package": "node scripts/package.mjs",
     "publish": "vsce publish"
   },
   "devDependencies": {

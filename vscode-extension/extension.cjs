@@ -9,6 +9,7 @@ const vscode = require("vscode");
 
 const DISPLAY_NAME = "Copilot Goal System";
 const DOCS_URL = "https://github.com/gabrimatic/copilot-goal-system#readme";
+const FIRST_INSTALL_PROMPT_KEY = "firstInstallPrompt.dismissed.v2";
 const HOOK_EVENTS = [
   "sessionStart",
   "userPromptSubmitted",
@@ -20,18 +21,39 @@ const HOOK_EVENTS = [
   "notification",
 ];
 
+let installInProgress = false;
+
 function activate(context) {
   const output = vscode.window.createOutputChannel(DISPLAY_NAME);
+  const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 90);
+  statusBar.name = DISPLAY_NAME;
   context.subscriptions.push(output);
+  context.subscriptions.push(statusBar);
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("copilotGoalSystem.install", () => installGoalSystem(context, output)),
-    vscode.commands.registerCommand("copilotGoalSystem.status", () => showInstallStatus(output)),
+    vscode.commands.registerCommand("copilotGoalSystem.install", () => installGoalSystem(context, output, statusBar)),
+    vscode.commands.registerCommand("copilotGoalSystem.status", () => showInstallStatus(output, statusBar)),
+    vscode.commands.registerCommand("copilotGoalSystem.openWalkthrough", openWalkthrough),
     vscode.commands.registerCommand("copilotGoalSystem.copyPrompt", () => copyRuntimePrompt(context)),
     vscode.commands.registerCommand("copilotGoalSystem.openDocs", openDocs),
-    vscode.commands.registerCommand("copilotGoalSystem.openInstalledFiles", () => revealPath(installedPaths().extensionDir)),
-    vscode.commands.registerCommand("copilotGoalSystem.openStateFolder", () => revealPath(installedPaths().stateRoot))
+    vscode.commands.registerCommand("copilotGoalSystem.openInstalledFiles", () => revealPath(installedPaths().extensionDir, "Installed files")),
+    vscode.commands.registerCommand("copilotGoalSystem.openStateFolder", () => revealPath(installedPaths().stateRoot, "Goal state folder")),
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (
+        event.affectsConfiguration("copilotGoalSystem.showStatusBar") ||
+        event.affectsConfiguration("copilotGoalSystem.homeOverride")
+      ) {
+        updateStatusBar(statusBar, output);
+      }
+    })
   );
+
+  updateStatusBar(statusBar, output);
+  setTimeout(() => {
+    maybeOfferFirstInstall(context, output, statusBar).catch((error) => {
+      output.appendLine(`First-run setup check failed: ${error.message || String(error)}`);
+    });
+  }, 1500);
 }
 
 function deactivate() {}
@@ -91,6 +113,14 @@ function hookInstalled(settings, eventName) {
   return hooks.some((hook) => hook && hook.type === "command" && hook.bash === "$HOME/.copilot/hooks/goal-context.sh");
 }
 
+function statusIsInstalled(status) {
+  return status.checks.every(([, ok]) => ok);
+}
+
+function missingChecks(status) {
+  return status.checks.filter(([, ok]) => !ok).map(([label]) => label);
+}
+
 async function collectStatus() {
   const paths = installedPaths();
   let settings = null;
@@ -132,13 +162,17 @@ async function instructionsSnippetInstalled(filePath) {
 }
 
 function formatStatusReport(status) {
+  const installed = statusIsInstalled(status);
+  const missing = missingChecks(status);
   const lines = [
     `${DISPLAY_NAME} install status`,
     "",
     `Home: ${status.paths.home}`,
     `Installed package: ${status.paths.extensionDir}`,
+    `Result: ${installed ? "Installed" : "Setup needed"}`,
     "",
-    ...status.checks.map(([label, ok]) => `${ok ? "OK" : "Missing"}  ${label}`),
+    "Checks:",
+    ...status.checks.map(([label, ok]) => `[${ok ? "OK" : "Missing"}] ${label}`),
     "",
     `Hook entries: ${status.hookEventsPresent.length}/${HOOK_EVENTS.length}`,
   ];
@@ -147,34 +181,106 @@ function formatStatusReport(status) {
     lines.push("", `Settings error: ${status.settingsError}`);
   }
 
-  lines.push(
-    "",
-    "After installing or updating, restart Copilot CLI and run:",
-    "/skills reload",
-    "/env"
-  );
+  if (!installed && missing.length > 0) {
+    lines.push("", "Missing:", ...missing.map((label) => `- ${label}`));
+  }
+
+  lines.push("", "Next steps:");
+  if (installed) {
+    lines.push("- Restart Copilot CLI after updates.", "- Run /skills reload", "- Run /env");
+  } else {
+    lines.push("- Run Copilot Goal System: Install into Copilot CLI.", "- Restart Copilot CLI.", "- Run /skills reload and /env.");
+  }
 
   return lines.join("\n");
 }
 
-async function showInstallStatus(output) {
+async function showInstallStatus(output, statusBar) {
   const status = await collectStatus();
   const report = formatStatusReport(status);
   output.clear();
   output.appendLine(report);
   output.show(true);
+  await updateStatusBar(statusBar, output, status);
 
-  const allOk = status.checks.every(([, ok]) => ok);
-  const action = allOk ? "Open Docs" : "Install or Update";
+  const allOk = statusIsInstalled(status);
+  const actions = allOk ? ["Open Docs", "Open State Folder"] : ["Install into Copilot CLI", "Open Walkthrough"];
   const result = await vscode.window.showInformationMessage(
     allOk ? "Copilot Goal System is installed." : "Copilot Goal System is not fully installed.",
-    action
+    ...actions
   );
 
   if (result === "Open Docs") await openDocs();
-  if (result === "Install or Update") {
+  if (result === "Open State Folder") await revealPath(status.paths.stateRoot, "Goal state folder");
+  if (result === "Open Walkthrough") await openWalkthrough();
+  if (result === "Install into Copilot CLI") {
     await vscode.commands.executeCommand("copilotGoalSystem.install");
   }
+}
+
+async function maybeOfferFirstInstall(context, output, statusBar) {
+  if (installInProgress || context.globalState.get(FIRST_INSTALL_PROMPT_KEY)) return;
+  if (!config().get("promptOnFirstRun", true)) return;
+
+  const status = await collectStatus();
+  await updateStatusBar(statusBar, output, status);
+  const allOk = statusIsInstalled(status);
+  if (allOk) {
+    await context.globalState.update(FIRST_INSTALL_PROMPT_KEY, true);
+    return;
+  }
+
+  const choice = await vscode.window.showInformationMessage(
+    "Set up Copilot Goal System in your local Copilot CLI profile to enable persisted /goal mode.",
+    "Set Up Now",
+    "Open Walkthrough",
+    "Show Status",
+    "Don't Ask Again"
+  );
+
+  await context.globalState.update(FIRST_INSTALL_PROMPT_KEY, true);
+
+  if (choice === "Set Up Now") {
+    await vscode.commands.executeCommand("copilotGoalSystem.install");
+  } else if (choice === "Open Walkthrough") {
+    await openWalkthrough();
+  } else if (choice === "Show Status") {
+    await showInstallStatus(output, statusBar);
+  }
+}
+
+async function updateStatusBar(statusBar, output, knownStatus) {
+  if (!statusBar) return;
+  if (!config().get("showStatusBar", true)) {
+    statusBar.hide();
+    return;
+  }
+
+  try {
+    const status = knownStatus || await collectStatus();
+    const installed = statusIsInstalled(status);
+    const missing = missingChecks(status);
+    statusBar.command = "copilotGoalSystem.status";
+    statusBar.text = installed ? "$(target) Goal" : "$(warning) Goal Setup";
+    statusBar.tooltip = installed
+      ? `${DISPLAY_NAME} is installed for ${status.paths.home}. Click to show status.`
+      : `${DISPLAY_NAME} needs setup for ${status.paths.home}. Missing: ${missing.join(", ") || "unknown"}. Click to show status.`;
+    statusBar.show();
+  } catch (error) {
+    statusBar.command = "copilotGoalSystem.status";
+    statusBar.text = "$(error) Goal Setup";
+    statusBar.tooltip = `${DISPLAY_NAME} status check failed: ${error.message || String(error)}`;
+    statusBar.show();
+    output.appendLine(`Status bar update failed: ${error.message || String(error)}`);
+  }
+}
+
+function setStatusBarInstalling(statusBar) {
+  if (!statusBar || !config().get("showStatusBar", true)) return;
+  statusBar.command = "copilotGoalSystem.status";
+  statusBar.text = "$(sync~spin) Goal Setup";
+  statusBar.tooltip = "Installing Copilot Goal System into the local Copilot CLI profile.";
+  statusBar.show();
 }
 
 function commandEnv(home) {
@@ -237,7 +343,7 @@ async function assertNode20(output, env) {
   }
 }
 
-async function installGoalSystem(context, output) {
+async function installGoalSystem(context, output, statusBar) {
   const paths = installedPaths();
   const script = installerPath(context);
 
@@ -253,6 +359,8 @@ async function installGoalSystem(context, output) {
   output.appendLine(`Bundle: ${bundleRoot(context)}`);
   output.appendLine("");
 
+  installInProgress = true;
+  setStatusBarInstalling(statusBar);
   try {
     await vscode.window.withProgress(
       {
@@ -269,8 +377,9 @@ async function installGoalSystem(context, output) {
       }
     );
 
+    await updateStatusBar(statusBar, output);
     if (config().get("showStatusAfterInstall", true)) {
-      await showInstallStatus(output);
+      await showInstallStatus(output, statusBar);
     } else {
       vscode.window.showInformationMessage("Copilot Goal System installed. Restart Copilot CLI, then run /skills reload and /env.");
     }
@@ -279,7 +388,10 @@ async function installGoalSystem(context, output) {
     output.appendLine("");
     output.appendLine(`Install failed: ${message}`);
     output.show(true);
+    await updateStatusBar(statusBar, output);
     vscode.window.showErrorMessage(`Copilot Goal System install failed: ${message}`);
+  } finally {
+    installInProgress = false;
   }
 }
 
@@ -298,9 +410,26 @@ async function openDocs() {
   await vscode.env.openExternal(vscode.Uri.parse(DOCS_URL));
 }
 
-async function revealPath(filePath) {
+async function openWalkthrough() {
   try {
-    await fsp.mkdir(filePath, { recursive: true });
+    await vscode.commands.executeCommand("workbench.action.openWalkthrough", "gabrimatic.copilot-goal-system#copilotGoalSystem.setup", false);
+  } catch {
+    await openDocs();
+  }
+}
+
+async function revealPath(filePath, label) {
+  try {
+    if (!await exists(filePath)) {
+      const actions = label === "Goal state folder" ? ["Show Status"] : ["Show Status", "Install into Copilot CLI"];
+      const result = await vscode.window.showInformationMessage(
+        label === "Goal state folder" ? `${label} does not exist yet. It appears after a goal runs.` : `${label} does not exist yet.`,
+        ...actions
+      );
+      if (result === "Show Status") await vscode.commands.executeCommand("copilotGoalSystem.status");
+      if (result === "Install into Copilot CLI") await vscode.commands.executeCommand("copilotGoalSystem.install");
+      return;
+    }
     await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(filePath));
   } catch (error) {
     vscode.window.showErrorMessage(`Could not open ${filePath}: ${error.message || String(error)}`);

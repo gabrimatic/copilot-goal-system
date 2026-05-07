@@ -1,6 +1,6 @@
 {
   "name": "copilot-goal-system",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "type": "module",
   "private": false,
   "description": "Manual goal mode with persisted state, drift blocking, and proof-based completion for GitHub Copilot CLI.",
@@ -28,8 +28,9 @@
   },
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check extension.mjs && node --check lib/goal-core.mjs && node --check scripts/install.mjs && bash -n install.sh && bash -n scripts/install.sh && bash -n hooks/goal-context.sh && jq . package.json plugin.json hooks.json .github/hooks/goal-system.json >/dev/null",
-    "verify": "npm run check && npm test",
+    "check": "node --check extension.mjs && node --check lib/goal-core.mjs && node --check scripts/install.mjs && node --check scripts/check-release.mjs && bash -n install.sh && bash -n scripts/install.sh && bash -n hooks/goal-context.sh && jq . package.json plugin.json hooks.json .github/hooks/goal-system.json >/dev/null",
+    "verify": "npm run check && npm run release:check && npm test",
+    "release:check": "node scripts/check-release.mjs",
     "vscode:prepare": "npm --prefix vscode-extension run prepare:bundle",
     "vscode:check": "npm --prefix vscode-extension run check",
     "vscode:package": "npm --prefix vscode-extension run package",

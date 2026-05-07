@@ -1,0 +1,43 @@
+name: Publish VS Code Extension
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish to the VS Code Marketplace after packaging.
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  package-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            vscode-extension/package-lock.json
+      - run: npm ci
+      - run: npm run verify
+      - run: npm --prefix vscode-extension ci
+      - run: npm run vscode:package
+      - name: Publish Marketplace extension
+        if: ${{ github.event_name == 'push' || inputs.publish == 'true' }}
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          version="$(node -p "require('./vscode-extension/package.json').version")"
+          npm --prefix vscode-extension exec vsce -- publish --packagePath "dist/copilot-goal-system-${version}.vsix"

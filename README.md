@@ -17,6 +17,20 @@ Copilot Goal System gives long-running Copilot sessions a persisted Active Goal,
 
 Runtime: **Node.js >= 20** and **GitHub Copilot CLI**.
 
+### VS Code
+
+Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=gabrimatic.copilot-goal-system).
+
+After VS Code installs the extension, run:
+
+```text
+Copilot Goal System: Install into Copilot CLI
+```
+
+The Marketplace **Install** button installs the VS Code wrapper. The command above performs the local Copilot CLI install for the current OS user.
+
+### Terminal
+
 Clone with SSH:
 
 ```bash
@@ -81,6 +95,14 @@ The installer preserves existing settings and appends only missing goal-system h
 
 Repository-level hook config is optional. Copy `.github/hooks/goal-system.json` into a repository if you want the same lifecycle hooks committed with a project.
 
+## Source and releases
+
+The root package is the single editable source for the goal-system runtime, hook, skill, tests, and documentation.
+
+The VS Code extension generates `vscode-extension/resources/goal-system/` during packaging. That directory is a build artifact and is ignored by Git, so there is no second runtime source to keep in sync.
+
+Marketplace releases are packaged snapshots. A GitHub commit does not update installed Marketplace copies by itself; a new extension version must be published. This repository includes `.github/workflows/publish-vscode.yml` so tagged or manually dispatched releases can package and publish the VSIX from GitHub when the `VSCE_PAT` secret is configured.
+
 ## How it works
 
 ```text
@@ -133,6 +155,7 @@ That test is supposed to fail before an agent fixes it. The runtime E2E prompt u
 | [Requirements](docs/requirements.md) | Goal-system contract and completion gates. |
 | [Runtime E2E review](docs/e2e-review.md) | Manual checklist for a live Copilot session. |
 | [Portability](docs/PORTABILITY.md) | Why the stable release is Copilot-first and what other CLIs would need. |
+| [Support](SUPPORT.md) | Where to report issues and what diagnostics to include. |
 
 ## Project layout
 

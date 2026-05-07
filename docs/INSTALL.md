@@ -13,6 +13,24 @@ This guide installs Copilot Goal System into your local GitHub Copilot CLI profi
 
 ## Preferred setup
 
+### VS Code Marketplace
+
+Install the extension:
+
+```text
+gabrimatic.copilot-goal-system
+```
+
+Then run this Command Palette command:
+
+```text
+Copilot Goal System: Install into Copilot CLI
+```
+
+The VS Code extension uses the current OS user's home directory by default. Set `copilotGoalSystem.homeOverride` when you need to install into a different local profile.
+
+### Terminal
+
 Clone with SSH:
 
 ```bash
@@ -66,6 +84,14 @@ notification
 Repository-level hook config is optional. Copy `.github/hooks/goal-system.json` into a repository when you want the hook setup committed with that project.
 
 ## Update
+
+From VS Code, update the extension through the Marketplace, then run:
+
+```text
+Copilot Goal System: Install into Copilot CLI
+```
+
+From a cloned repository:
 
 ```bash
 cd copilot-goal-system
