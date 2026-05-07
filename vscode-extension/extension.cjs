@@ -10,7 +10,7 @@ const vscode = require("vscode");
 const DISPLAY_NAME = "Copilot Goal System";
 const DOCS_URL = "https://github.com/gabrimatic/copilot-goal-system#readme";
 const FIRST_INSTALL_PROMPT_KEY = "firstInstallPrompt.dismissed.v2";
-const HOOK_EVENTS = [
+const CLI_HOOK_EVENTS = [
   "sessionStart",
   "userPromptSubmitted",
   "preCompact",
@@ -20,6 +20,7 @@ const HOOK_EVENTS = [
   "postToolUseFailure",
   "notification",
 ];
+const VSCODE_HOOK_EVENTS = ["SessionStart", "PreToolUse", "PostToolUse", "PreCompact", "SubagentStart", "SubagentStop", "Stop"];
 
 let installInProgress = false;
 
@@ -31,7 +32,9 @@ function activate(context) {
   context.subscriptions.push(statusBar);
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("copilotGoalSystem.install", () => installGoalSystem(context, output, statusBar)),
+    vscode.commands.registerCommand("copilotGoalSystem.install", () => installGoalSystem(context, output, statusBar, "all")),
+    vscode.commands.registerCommand("copilotGoalSystem.installCli", () => installGoalSystem(context, output, statusBar, "cli")),
+    vscode.commands.registerCommand("copilotGoalSystem.installVscodeChat", () => installGoalSystem(context, output, statusBar, "vscode-chat")),
     vscode.commands.registerCommand("copilotGoalSystem.status", () => showInstallStatus(output, statusBar)),
     vscode.commands.registerCommand("copilotGoalSystem.openWalkthrough", openWalkthrough),
     vscode.commands.registerCommand("copilotGoalSystem.copyPrompt", () => copyRuntimePrompt(context)),
@@ -73,17 +76,42 @@ function configuredHome() {
 function installedPaths() {
   const home = configuredHome();
   const copilotRoot = path.join(home, ".copilot");
+  const vscodeMcpConfigFile = configuredVscodeMcpConfigPath(home);
   return {
     home,
     copilotRoot,
     extensionDir: path.join(copilotRoot, "extensions", "goal-system"),
     skillFile: path.join(copilotRoot, "skills", "goal", "SKILL.md"),
     hookFile: path.join(copilotRoot, "hooks", "goal-context.sh"),
+    vscodeHookConfigFile: path.join(copilotRoot, "hooks", "goal-system-vscode.json"),
+    vscodeAgentFile: path.join(copilotRoot, "agents", "goal-system.agent.md"),
+    vscodeMcpConfigFile,
+    mcpServerFile: path.join(copilotRoot, "extensions", "goal-system", "adapters", "vscode-chat", "mcp-server.mjs"),
     settingsFile: path.join(copilotRoot, "settings.json"),
     instructionsFile: path.join(copilotRoot, "copilot-instructions.md"),
     sdkPackage: path.join(copilotRoot, "extensions", "goal-system", "node_modules", "@github", "copilot-sdk", "package.json"),
     stateRoot: path.join(copilotRoot, "session-state", "goal-system"),
   };
+}
+
+function configuredVscodeMcpConfigPath(home) {
+  const override = String(config().get("vscodeMcpConfigPathOverride", "") || "").trim();
+  if (override) {
+    if (override === "~") return home;
+    if (override.startsWith("~/")) return path.join(home, override.slice(2));
+    return path.resolve(override);
+  }
+
+  if (process.platform === "win32") {
+    return path.join(process.env.APPDATA || path.join(home, "AppData", "Roaming"), "Code", "User", "mcp.json");
+  }
+  if (process.platform === "darwin") {
+    const appName = String(vscode.env.appName || "");
+    const productDir = /insiders/i.test(appName) ? "Code - Insiders" : "Code";
+    return path.join(home, "Library", "Application Support", productDir, "User", "mcp.json");
+  }
+  const productDir = /insiders/i.test(String(vscode.env.appName || "")) ? "Code - Insiders" : "Code";
+  return path.join(process.env.XDG_CONFIG_HOME || path.join(home, ".config"), productDir, "User", "mcp.json");
 }
 
 function bundleRoot(context) {
@@ -113,6 +141,19 @@ function hookInstalled(settings, eventName) {
   return hooks.some((hook) => hook && hook.type === "command" && hook.bash === "$HOME/.copilot/hooks/goal-context.sh");
 }
 
+function vscodeHookConfigInstalled(config) {
+  if (!config || typeof config !== "object" || !config.hooks || typeof config.hooks !== "object") return false;
+  return VSCODE_HOOK_EVENTS.every((eventName) => {
+    const hooks = Array.isArray(config.hooks[eventName]) ? config.hooks[eventName] : [];
+    return hooks.some((hook) => hook && hook.type === "command" && /hook-runner\.mjs/.test(String(hook.command || hook.windows || "")));
+  });
+}
+
+function mcpServerInstalled(config) {
+  const server = config && config.servers && config.servers.goalSystem;
+  return Boolean(server && server.type === "stdio" && Array.isArray(server.args) && server.args.some((arg) => /mcp-server\.mjs$/.test(String(arg))));
+}
+
 function statusIsInstalled(status) {
   return status.checks.every(([, ok]) => ok);
 }
@@ -125,6 +166,10 @@ async function collectStatus() {
   const paths = installedPaths();
   let settings = null;
   let settingsError = "";
+  let vscodeHookConfig = null;
+  let vscodeHookConfigError = "";
+  let mcpConfig = null;
+  let mcpConfigError = "";
 
   if (await exists(paths.settingsFile)) {
     try {
@@ -134,7 +179,23 @@ async function collectStatus() {
     }
   }
 
-  const hookEventsPresent = settings ? HOOK_EVENTS.filter((eventName) => hookInstalled(settings, eventName)) : [];
+  if (await exists(paths.vscodeHookConfigFile)) {
+    try {
+      vscodeHookConfig = await readJson(paths.vscodeHookConfigFile);
+    } catch (error) {
+      vscodeHookConfigError = error && error.message ? error.message : "VS Code hook config could not be parsed";
+    }
+  }
+
+  if (await exists(paths.vscodeMcpConfigFile)) {
+    try {
+      mcpConfig = await readJson(paths.vscodeMcpConfigFile);
+    } catch (error) {
+      mcpConfigError = error && error.message ? error.message : "VS Code MCP config could not be parsed";
+    }
+  }
+
+  const cliHookEventsPresent = settings ? CLI_HOOK_EVENTS.filter((eventName) => hookInstalled(settings, eventName)) : [];
 
   return {
     paths,
@@ -142,13 +203,21 @@ async function collectStatus() {
       ["Extension package", await exists(path.join(paths.extensionDir, "package.json"))],
       ["Production dependencies", await exists(paths.sdkPackage)],
       ["Goal skill", await exists(paths.skillFile)],
-      ["Hook helper", await exists(paths.hookFile)],
-      ["Settings JSON", Boolean(settings) && !settingsError],
-      ["All goal hook entries", hookEventsPresent.length === HOOK_EVENTS.length],
+      ["CLI hook helper", await exists(paths.hookFile)],
+      ["CLI settings JSON", Boolean(settings) && !settingsError],
+      ["All CLI hook entries", cliHookEventsPresent.length === CLI_HOOK_EVENTS.length],
       ["Instruction snippet", await instructionsSnippetInstalled(paths.instructionsFile)],
+      ["VS Code Chat custom agent", await exists(paths.vscodeAgentFile)],
+      ["VS Code Chat hook config", vscodeHookConfigInstalled(vscodeHookConfig)],
+      ["VS Code Chat MCP server", await exists(paths.mcpServerFile)],
+      ["VS Code MCP config", mcpServerInstalled(mcpConfig)],
     ],
-    hookEventsPresent,
+    cliHookEventsPresent,
+    vscodeHookConfigInstalled: vscodeHookConfigInstalled(vscodeHookConfig),
+    mcpServerConfigured: mcpServerInstalled(mcpConfig),
     settingsError,
+    vscodeHookConfigError,
+    mcpConfigError,
   };
 }
 
@@ -174,11 +243,19 @@ function formatStatusReport(status) {
     "Checks:",
     ...status.checks.map(([label, ok]) => `[${ok ? "OK" : "Missing"}] ${label}`),
     "",
-    `Hook entries: ${status.hookEventsPresent.length}/${HOOK_EVENTS.length}`,
+    `CLI hook entries: ${status.cliHookEventsPresent.length}/${CLI_HOOK_EVENTS.length}`,
+    `VS Code hook config: ${status.vscodeHookConfigInstalled ? "Installed" : "Missing"}`,
+    `VS Code MCP server: ${status.mcpServerConfigured ? "Configured" : "Missing"}`,
   ];
 
   if (status.settingsError) {
     lines.push("", `Settings error: ${status.settingsError}`);
+  }
+  if (status.vscodeHookConfigError) {
+    lines.push("", `VS Code hook config error: ${status.vscodeHookConfigError}`);
+  }
+  if (status.mcpConfigError) {
+    lines.push("", `VS Code MCP config error: ${status.mcpConfigError}`);
   }
 
   if (!installed && missing.length > 0) {
@@ -187,9 +264,9 @@ function formatStatusReport(status) {
 
   lines.push("", "Next steps:");
   if (installed) {
-    lines.push("- Restart Copilot CLI after updates.", "- Run /skills reload", "- Run /env");
+    lines.push("- Restart Copilot CLI after updates.", "- Run /skills reload", "- Run /env", "- In VS Code, run MCP: Reset Cached Tools or reload the window.");
   } else {
-    lines.push("- Run Copilot Goal System: Install into Copilot CLI.", "- Restart Copilot CLI.", "- Run /skills reload and /env.");
+    lines.push("- Run Copilot Goal System: Install Recommended Setup.", "- Restart Copilot CLI.", "- Reload VS Code or run MCP: Reset Cached Tools.");
   }
 
   return lines.join("\n");
@@ -204,7 +281,7 @@ async function showInstallStatus(output, statusBar) {
   await updateStatusBar(statusBar, output, status);
 
   const allOk = statusIsInstalled(status);
-  const actions = allOk ? ["Open Docs", "Open State Folder"] : ["Install into Copilot CLI", "Open Walkthrough"];
+  const actions = allOk ? ["Open Docs", "Open State Folder"] : ["Install Recommended Setup", "Install CLI Only", "Install VS Code Chat Only", "Open Walkthrough"];
   const result = await vscode.window.showInformationMessage(
     allOk ? "Copilot Goal System is installed." : "Copilot Goal System is not fully installed.",
     ...actions
@@ -213,9 +290,11 @@ async function showInstallStatus(output, statusBar) {
   if (result === "Open Docs") await openDocs();
   if (result === "Open State Folder") await revealPath(status.paths.stateRoot, "Goal state folder");
   if (result === "Open Walkthrough") await openWalkthrough();
-  if (result === "Install into Copilot CLI") {
+  if (result === "Install Recommended Setup") {
     await vscode.commands.executeCommand("copilotGoalSystem.install");
   }
+  if (result === "Install CLI Only") await vscode.commands.executeCommand("copilotGoalSystem.installCli");
+  if (result === "Install VS Code Chat Only") await vscode.commands.executeCommand("copilotGoalSystem.installVscodeChat");
 }
 
 async function maybeOfferFirstInstall(context, output, statusBar) {
@@ -231,7 +310,7 @@ async function maybeOfferFirstInstall(context, output, statusBar) {
   }
 
   const choice = await vscode.window.showInformationMessage(
-    "Set up Copilot Goal System in your local Copilot CLI profile to enable persisted /goal mode.",
+    "Set up Copilot Goal System for Copilot CLI and VS Code Copilot Chat.",
     "Set Up Now",
     "Open Walkthrough",
     "Show Status",
@@ -279,7 +358,7 @@ function setStatusBarInstalling(statusBar) {
   if (!statusBar || !config().get("showStatusBar", true)) return;
   statusBar.command = "copilotGoalSystem.status";
   statusBar.text = "$(sync~spin) Goal Setup";
-  statusBar.tooltip = "Installing Copilot Goal System into the local Copilot CLI profile.";
+  statusBar.tooltip = "Installing Copilot Goal System into local Copilot profiles.";
   statusBar.show();
 }
 
@@ -343,7 +422,7 @@ async function assertNode20(output, env) {
   }
 }
 
-async function installGoalSystem(context, output, statusBar) {
+async function installGoalSystem(context, output, statusBar, target) {
   const paths = installedPaths();
   const script = installerPath(context);
 
@@ -355,6 +434,7 @@ async function installGoalSystem(context, output, statusBar) {
   output.clear();
   output.show(true);
   output.appendLine(`${DISPLAY_NAME} installer`);
+  output.appendLine(`Target: ${target}`);
   output.appendLine(`Home: ${paths.home}`);
   output.appendLine(`Bundle: ${bundleRoot(context)}`);
   output.appendLine("");
@@ -373,7 +453,7 @@ async function installGoalSystem(context, output, statusBar) {
         progress.report({ message: "Checking Node.js" });
         await assertNode20(output, env);
         progress.report({ message: "Copying files and installing dependencies" });
-        await runStreaming("node", [script], { cwd: bundleRoot(context), env }, output);
+        await runStreaming("node", [script, "--target", target, "--vscode-mcp-config", paths.vscodeMcpConfigFile], { cwd: bundleRoot(context), env }, output);
       }
     );
 
@@ -381,7 +461,7 @@ async function installGoalSystem(context, output, statusBar) {
     if (config().get("showStatusAfterInstall", true)) {
       await showInstallStatus(output, statusBar);
     } else {
-      vscode.window.showInformationMessage("Copilot Goal System installed. Restart Copilot CLI, then run /skills reload and /env.");
+      vscode.window.showInformationMessage("Copilot Goal System installed. Restart Copilot CLI and reload VS Code if you use both adapters.");
     }
   } catch (error) {
     const message = error && error.message ? error.message : String(error);
@@ -400,7 +480,7 @@ async function copyRuntimePrompt(context) {
   try {
     const prompt = await fsp.readFile(promptPath, "utf8");
     await vscode.env.clipboard.writeText(prompt);
-    vscode.window.showInformationMessage("Runtime E2E prompt copied. Paste it into Copilot CLI after installing the goal system.");
+    vscode.window.showInformationMessage("Runtime E2E prompt copied. Paste it into Copilot CLI or VS Code Copilot Chat after installing the goal system.");
   } catch (error) {
     vscode.window.showErrorMessage(`Could not copy the runtime prompt: ${error.message || String(error)}`);
   }
@@ -421,13 +501,13 @@ async function openWalkthrough() {
 async function revealPath(filePath, label) {
   try {
     if (!await exists(filePath)) {
-      const actions = label === "Goal state folder" ? ["Show Status"] : ["Show Status", "Install into Copilot CLI"];
+      const actions = label === "Goal state folder" ? ["Show Status"] : ["Show Status", "Install Recommended Setup"];
       const result = await vscode.window.showInformationMessage(
         label === "Goal state folder" ? `${label} does not exist yet. It appears after a goal runs.` : `${label} does not exist yet.`,
         ...actions
       );
       if (result === "Show Status") await vscode.commands.executeCommand("copilotGoalSystem.status");
-      if (result === "Install into Copilot CLI") await vscode.commands.executeCommand("copilotGoalSystem.install");
+      if (result === "Install Recommended Setup") await vscode.commands.executeCommand("copilotGoalSystem.install");
       return;
     }
     await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(filePath));

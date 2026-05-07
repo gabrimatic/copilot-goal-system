@@ -12,6 +12,8 @@ Covered:
 
 - `node --check extension.mjs`
 - `node --check lib/goal-core.mjs`
+- `node --check adapters/vscode-chat/hook-runner.mjs`
+- `node --check adapters/vscode-chat/mcp-server.mjs`
 - `node --check scripts/install.mjs`
 - shell syntax checks
 - JSON validation for manifests and hook config
@@ -42,6 +44,10 @@ Covered:
 - agentStop ignoring terminal blocked goals
 - preCompact snapshot side effect
 - drift blocking helper behavior
+- VS Code Chat hook output shape
+- VS Code Chat stop blocking
+- VS Code Chat persisted drift tracking
+- VS Code Chat installer MCP merge behavior
 
 ## Fixture sanity check
 

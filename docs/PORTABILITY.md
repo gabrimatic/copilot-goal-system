@@ -4,7 +4,7 @@ This release is Copilot-first.
 
 The core idea is portable: keep a persisted Active Goal outside chat memory, inject compact reminders at lifecycle boundaries, deny drift, isolate subagents, and refuse completion without proof.
 
-The implementation is not automatically portable because every CLI exposes different hooks, tools, settings, and subagent metadata.
+The implementation is not automatically portable because every host exposes different hooks, tools, settings, and subagent metadata.
 
 ## Required primitives
 
@@ -22,7 +22,7 @@ Any adapter needs these primitives:
 
 ## GitHub Copilot CLI
 
-Supported by this project.
+Stable strict mode is supported by this project.
 
 Copilot provides the surfaces this implementation uses:
 
@@ -33,6 +33,23 @@ Copilot provides the surfaces this implementation uses:
 - stop hooks
 - subagent hooks
 - local settings
+
+## VS Code Copilot Chat
+
+Preview strict mode is supported by this project.
+
+VS Code provides the surfaces this implementation uses:
+
+- custom agents
+- MCP servers
+- `SessionStart` and `UserPromptSubmit` hooks
+- `PreToolUse` and `PostToolUse` hooks
+- `PreCompact` hook
+- `Stop` hook
+- `SubagentStart` and `SubagentStop` hooks
+- user-level hook and MCP configuration
+
+The adapter is preview because VS Code hooks and agent plugins are Preview surfaces and can be disabled by organization policy.
 
 ## Model-runtime wrappers
 

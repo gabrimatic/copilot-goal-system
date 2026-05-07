@@ -10,6 +10,7 @@ const targetRoot = path.join(extensionRoot, "resources", "goal-system");
 
 const entries = [
   ".github/hooks/goal-system.json",
+  "adapters",
   "CHANGELOG.md",
   "CODE_OF_CONDUCT.md",
   "CONTRIBUTING.md",

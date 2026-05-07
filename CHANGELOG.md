@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.0
+
+- Adds a VS Code Copilot Chat preview adapter with custom agent, VS Code lifecycle hooks, and local MCP goal tools.
+- Adds `--target cli`, `--target vscode-chat`, and `--target all` installer modes.
+- Adds persisted VS Code Chat drift tracking through shared goal history.
+- Adds VS Code Chat install, hook, and MCP tests.
+- Updates documentation for CLI stable mode and VS Code Chat preview mode.
+
 ## 1.0.2
 
 - Adds a compact VS Code status bar item for setup state and quick status access.

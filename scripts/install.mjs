@@ -12,14 +12,13 @@ const copilotRoot = path.join(home, ".copilot");
 const extensionDir = path.join(copilotRoot, "extensions", "goal-system");
 const skillDir = path.join(copilotRoot, "skills", "goal");
 const hookDir = path.join(copilotRoot, "hooks");
+const agentDir = path.join(copilotRoot, "agents");
 const settingsPath = path.join(copilotRoot, "settings.json");
 const instructionsPath = path.join(copilotRoot, "copilot-instructions.md");
+const vscodeHookConfigPath = path.join(hookDir, "goal-system-vscode.json");
+const vscodeAgentPath = path.join(agentDir, "goal-system.agent.md");
 const markerStart = "<!-- copilot-goal-system snippet start -->";
 const markerEnd = "<!-- copilot-goal-system snippet end -->";
-
-function stamp() {
-  return new Date().toISOString().replace(/[:.]/g, "-");
-}
 
 const hookEvents = {
   sessionStart: [{ type: "command", bash: "$HOME/.copilot/hooks/goal-context.sh", timeoutSec: 5 }],
@@ -39,11 +38,40 @@ const hookEvents = {
   ],
 };
 
-function run(command, args, options = {}) {
-  const result = spawnSync(command, args, { stdio: "inherit", ...options });
-  if (result.status !== 0) {
-    throw new Error(`${command} ${args.join(" ")} failed with exit code ${result.status}`);
+function stamp() {
+  return new Date().toISOString().replace(/[:.]/g, "-");
+}
+
+function parseArgs(argv) {
+  const options = {
+    target: "cli",
+    vscodeMcpConfigPath: process.env.GOAL_SYSTEM_VSCODE_MCP_CONFIG_PATH || "",
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "--target") {
+      options.target = argv[index + 1] || options.target;
+      index += 1;
+    } else if (arg.startsWith("--target=")) {
+      options.target = arg.slice("--target=".length);
+    } else if (arg === "--vscode-mcp-config") {
+      options.vscodeMcpConfigPath = argv[index + 1] || options.vscodeMcpConfigPath;
+      index += 1;
+    } else if (arg.startsWith("--vscode-mcp-config=")) {
+      options.vscodeMcpConfigPath = arg.slice("--vscode-mcp-config=".length);
+    }
   }
+
+  return options;
+}
+
+const options = parseArgs(process.argv.slice(2));
+
+function selectedTargets(target) {
+  if (target === "all") return new Set(["cli", "vscode-chat"]);
+  if (target === "cli" || target === "vscode-chat") return new Set([target]);
+  throw new Error(`Unknown install target "${target}". Use cli, vscode-chat, or all.`);
 }
 
 async function readJsonIfExists(filePath) {
@@ -56,6 +84,36 @@ async function readJsonIfExists(filePath) {
     }
     throw error;
   }
+}
+
+async function writeTextAtomic(filePath, text, options = {}) {
+  const { backup = true } = options;
+  let original = null;
+  try {
+    original = await readFile(filePath, "utf8");
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+
+  await mkdir(path.dirname(filePath), { recursive: true });
+  if (backup && original !== null && original !== text) {
+    await writeFile(`${filePath}.backup-${stamp()}`, original, "utf8");
+  }
+
+  const tempPath = `${filePath}.tmp-${process.pid}`;
+  await writeFile(tempPath, text, "utf8");
+  await rename(tempPath, filePath);
+}
+
+function defaultVscodeMcpConfigPath() {
+  if (options.vscodeMcpConfigPath) return path.resolve(options.vscodeMcpConfigPath);
+  if (process.platform === "win32") {
+    return path.join(process.env.APPDATA || path.join(home, "AppData", "Roaming"), "Code", "User", "mcp.json");
+  }
+  if (process.platform === "darwin") {
+    return path.join(home, "Library", "Application Support", "Code", "User", "mcp.json");
+  }
+  return path.join(process.env.XDG_CONFIG_HOME || path.join(home, ".config"), "Code", "User", "mcp.json");
 }
 
 function sameHook(left, right) {
@@ -89,9 +147,7 @@ async function mergeSettingsHooks() {
     await writeFile(`${settingsPath}.backup-${stamp()}`, originalSettings, "utf8");
   }
 
-  const tempPath = `${settingsPath}.tmp-${process.pid}`;
-  await writeFile(tempPath, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
-  await rename(tempPath, settingsPath);
+  await writeTextAtomic(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, { backup: false });
 }
 
 async function appendInstructionsSnippet() {
@@ -107,19 +163,14 @@ async function appendInstructionsSnippet() {
 
   const snippet = await readFile(path.join(root, "instructions", "copilot-instructions.goal-snippet.md"), "utf8");
   const next = `${existing.trimEnd()}\n\n${markerStart}\n${snippet.trim()}\n${markerEnd}\n`;
-  if (existing) {
-    await writeFile(`${instructionsPath}.backup-${stamp()}`, existing, "utf8");
-  }
-
-  const tempPath = `${instructionsPath}.tmp-${process.pid}`;
-  await writeFile(tempPath, next, "utf8");
-  await rename(tempPath, instructionsPath);
+  await writeTextAtomic(instructionsPath, next, { backup: Boolean(existing) });
 }
 
 async function installFiles() {
   await mkdir(extensionDir, { recursive: true });
   await mkdir(skillDir, { recursive: true });
   await mkdir(hookDir, { recursive: true });
+  await mkdir(agentDir, { recursive: true });
 
   await cp(root, extensionDir, {
     recursive: true,
@@ -128,13 +179,21 @@ async function installFiles() {
       const relative = path.relative(root, source);
       if (!relative) return true;
       const parts = relative.split(path.sep);
-      return !parts.includes("node_modules") && !parts.includes(".git");
+      return !parts.includes("node_modules") && !parts.includes(".git") && !parts.includes("dist") && !parts.includes("vscode-extension");
     },
   });
 
   await copyFile(path.join(root, "skills", "goal", "SKILL.md"), path.join(skillDir, "SKILL.md"));
   await copyFile(path.join(root, "hooks", "goal-context.sh"), path.join(hookDir, "goal-context.sh"));
-  await chmod(path.join(hookDir, "goal-context.sh"), fsConstants.S_IRWXU | fsConstants.S_IRGRP | fsConstants.S_IXGRP | fsConstants.S_IROTH | fsConstants.S_IXOTH);
+
+  const executableFiles = [
+    path.join(hookDir, "goal-context.sh"),
+    path.join(extensionDir, "adapters", "vscode-chat", "hook-runner.mjs"),
+    path.join(extensionDir, "adapters", "vscode-chat", "mcp-server.mjs"),
+  ];
+  for (const filePath of executableFiles) {
+    await chmod(filePath, fsConstants.S_IRWXU | fsConstants.S_IRGRP | fsConstants.S_IXGRP | fsConstants.S_IROTH | fsConstants.S_IXOTH);
+  }
 }
 
 function installDependencies() {
@@ -152,22 +211,68 @@ function installDependencies() {
   }
 }
 
+async function installVscodeChatAdapter() {
+  const hookConfig = await readFile(path.join(root, "adapters", "vscode-chat", "hooks", "goal-system.json"), "utf8");
+  await writeTextAtomic(vscodeHookConfigPath, hookConfig.endsWith("\n") ? hookConfig : `${hookConfig}\n`);
+
+  const agent = await readFile(path.join(root, "adapters", "vscode-chat", "agents", "goal-system.agent.md"), "utf8");
+  await writeTextAtomic(vscodeAgentPath, agent.endsWith("\n") ? agent : `${agent}\n`);
+
+  const mcpConfigPath = defaultVscodeMcpConfigPath();
+  const mcpConfig = await readJsonIfExists(mcpConfigPath);
+  mcpConfig.servers = mcpConfig.servers && typeof mcpConfig.servers === "object" && !Array.isArray(mcpConfig.servers) ? mcpConfig.servers : {};
+  mcpConfig.servers.goalSystem = {
+    type: "stdio",
+    command: process.execPath,
+    args: [path.join(extensionDir, "adapters", "vscode-chat", "mcp-server.mjs")],
+    env: {
+      GOAL_SYSTEM_ADAPTER: "vscode-chat",
+    },
+  };
+
+  await writeTextAtomic(mcpConfigPath, `${JSON.stringify(mcpConfig, null, 2)}\n`);
+  return mcpConfigPath;
+}
+
 async function main() {
+  const targets = selectedTargets(options.target);
   await installFiles();
   installDependencies();
-  await mergeSettingsHooks();
-  await appendInstructionsSnippet();
 
-  console.log(`Installed Copilot Goal System:
-- ${extensionDir}
-- ${path.join(skillDir, "SKILL.md")}
-- ${path.join(hookDir, "goal-context.sh")}
-- ${settingsPath}
-- ${instructionsPath}
+  let vscodeMcpConfigPath = "";
+  if (targets.has("cli")) {
+    await mergeSettingsHooks();
+    await appendInstructionsSnippet();
+  }
+  if (targets.has("vscode-chat")) {
+    vscodeMcpConfigPath = await installVscodeChatAdapter();
+  }
 
-Restart Copilot CLI, then run:
-  /skills reload
-  /env`);
+  const installedLines = [
+    `Installed Copilot Goal System (${[...targets].join(", ")}):`,
+    `- ${extensionDir}`,
+  ];
+  if (targets.has("cli")) {
+    installedLines.push(
+      `- ${path.join(skillDir, "SKILL.md")}`,
+      `- ${path.join(hookDir, "goal-context.sh")}`,
+      `- ${settingsPath}`,
+      `- ${instructionsPath}`
+    );
+  }
+  if (targets.has("vscode-chat")) {
+    installedLines.push(`- ${vscodeAgentPath}`, `- ${vscodeHookConfigPath}`, `- ${vscodeMcpConfigPath}`);
+  }
+
+  const nextSteps = [];
+  if (targets.has("cli")) {
+    nextSteps.push("Restart Copilot CLI, then run:", "  /skills reload", "  /env");
+  }
+  if (targets.has("vscode-chat")) {
+    nextSteps.push("In VS Code, run MCP: Reset Cached Tools or reload the window, then select the Goal System custom agent in Copilot Chat.");
+  }
+
+  console.log(`${installedLines.join("\n")}\n\n${nextSteps.join("\n")}`);
 }
 
 main().catch((error) => {

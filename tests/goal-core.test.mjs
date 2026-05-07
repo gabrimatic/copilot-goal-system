@@ -6,7 +6,9 @@ import test from "node:test";
 
 import {
   GoalStore,
+  appendGoalHistory,
   buildDriftEnforcement,
+  countToolDrift,
   createGoalRecord,
   formatGoalSummary,
   getOutstandingIssues,
@@ -17,6 +19,7 @@ import {
   redactSensitiveText,
   safeSessionId,
   shouldEnforceDrift,
+  summarizeToolUse,
   trimmedPromptObjective,
   validateGoalCompletion,
 } from "../lib/goal-core.mjs";
@@ -244,6 +247,7 @@ test("compact snapshots summarize large queues without mutating authoritative st
 
 test("drift enforcement blocks non-goal tools after the configured threshold", () => {
   assert.equal(isGoalSystemToolName("goal_system_update"), true);
+  assert.equal(isGoalSystemToolName("mcp_goalSystem_goal_system_update"), true);
   assert.equal(isGoalSystemToolName("bash"), false);
 
   assert.equal(
@@ -261,6 +265,22 @@ test("drift enforcement blocks non-goal tools after the configured threshold", (
 
   assert.match(buildDriftEnforcement(7, 5), /7 tool calls/);
   assert.match(buildDriftEnforcement(7, 5), /goal_system_update/);
+});
+
+test("shared tool history helpers support VS Code hook payloads", () => {
+  assert.equal(summarizeToolUse({ toolName: "bash", toolArgs: { command: "npm test" } }), "bash: npm test");
+  assert.equal(summarizeToolUse({ toolName: "apply_patch", toolArgs: {} }), "apply_patch");
+  assert.equal(summarizeToolUse({ toolName: "rg", toolArgs: { pattern: "goal" } }), "rg: goal");
+  assert.equal(summarizeToolUse({ tool_name: "runTerminalCommand", tool_input: { command: "npm test" } }), "runTerminalCommand");
+
+  let goal = createGoalRecord({ objective: "Track drift" }, "session-drift", process.cwd());
+  goal = appendGoalHistory(goal, "tool", "read: src/a.ts");
+  goal = appendGoalHistory(goal, "tool", "read: src/b.ts");
+  assert.equal(countToolDrift(goal), 2);
+
+  goal = appendGoalHistory(goal, "update", "Goal state updated");
+  goal = appendGoalHistory(goal, "tool", "read: src/c.ts");
+  assert.equal(countToolDrift(goal), 1);
 });
 
 test("subagent detection keeps delegated workers outside goal ownership", () => {

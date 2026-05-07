@@ -1,6 +1,6 @@
 # Install Guide
 
-This guide installs Copilot Goal System into your local GitHub Copilot CLI profile.
+This guide installs Copilot Goal System into your local GitHub Copilot profiles.
 
 ## Requirements
 
@@ -8,7 +8,8 @@ This guide installs Copilot Goal System into your local GitHub Copilot CLI profi
 |-------------|---------|-------|
 | Node.js | `>= 20` | Required by the Copilot SDK package. |
 | npm | `>= 10` | Used by the installer to install production dependencies. |
-| GitHub Copilot CLI | current | Restart it after install. |
+| GitHub Copilot CLI | current | Required for CLI strict mode. Restart it after install. |
+| VS Code Copilot Chat | current | Required for VS Code Chat preview mode. |
 | macOS or Linux shell | bash-compatible | The hook helper is a shell script. |
 
 ## Preferred setup
@@ -27,7 +28,13 @@ Then run this Command Palette command:
 Copilot Goal System: Install into Copilot CLI
 ```
 
-The VS Code extension uses the current OS user's home directory by default. Set `copilotGoalSystem.homeOverride` when you need to install into a different local profile.
+For both adapters, run:
+
+```text
+Copilot Goal System: Install Recommended Setup
+```
+
+The VS Code extension uses the current OS user's home directory by default. Set `copilotGoalSystem.homeOverride` when you need to install into a different local profile. Set `copilotGoalSystem.vscodeMcpConfigPathOverride` only if your VS Code MCP user config lives outside the detected profile path.
 
 ### Terminal
 
@@ -47,6 +54,18 @@ cd copilot-goal-system
 ./install.sh
 ```
 
+Install both adapters:
+
+```bash
+./install.sh --target all
+```
+
+Install only the VS Code Chat adapter:
+
+```bash
+./install.sh --target vscode-chat
+```
+
 Restart Copilot CLI:
 
 ```text
@@ -61,6 +80,9 @@ Restart Copilot CLI:
 | `~/.copilot/extensions/goal-system/` | Extension package, tests, docs, hook config, and dependencies. |
 | `~/.copilot/skills/goal/SKILL.md` | Goal-mode skill used by Copilot. |
 | `~/.copilot/hooks/goal-context.sh` | CLI lifecycle hook helper. |
+| `~/.copilot/hooks/goal-system-vscode.json` | VS Code Chat lifecycle hook config. |
+| `~/.copilot/agents/goal-system.agent.md` | VS Code Chat custom agent. |
+| VS Code user `mcp.json` | `goalSystem` stdio MCP server config. |
 | `~/.copilot/settings.json` | Hook entries are merged into existing settings. |
 | `~/.copilot/copilot-instructions.md` | A short goal-system reminder is appended once. |
 
@@ -83,6 +105,18 @@ notification
 
 Repository-level hook config is optional. Copy `.github/hooks/goal-system.json` into a repository when you want the hook setup committed with that project.
 
+The VS Code Chat adapter adds these hook events:
+
+```text
+SessionStart
+PreToolUse
+PostToolUse
+PreCompact
+SubagentStart
+SubagentStop
+Stop
+```
+
 ## Update
 
 From VS Code, update the extension through the Marketplace, then run:
@@ -101,6 +135,12 @@ npm run verify
 ./install.sh
 ```
 
+For both adapters:
+
+```bash
+./install.sh --target all
+```
+
 Restart Copilot CLI after updating.
 
 ## Uninstall
@@ -110,7 +150,9 @@ Remove the installed files:
 ```bash
 rm -rf ~/.copilot/extensions/goal-system
 rm -rf ~/.copilot/skills/goal
+rm -f ~/.copilot/agents/goal-system.agent.md
 rm -f ~/.copilot/hooks/goal-context.sh
+rm -f ~/.copilot/hooks/goal-system-vscode.json
 ```
 
 Then edit `~/.copilot/settings.json` and remove hook entries whose `bash` value is:
@@ -126,6 +168,8 @@ Also remove the marked snippet in `~/.copilot/copilot-instructions.md`:
 ...
 <!-- copilot-goal-system snippet end -->
 ```
+
+Then remove the `goalSystem` entry from the VS Code user `mcp.json`.
 
 ## Troubleshooting
 
@@ -153,6 +197,16 @@ Run `goal_system_status` inside Copilot before continuing. If no state exists, s
 ### Tool calls get denied
 
 The drift guard is working. Call `goal_system_update` with real progress, inspection evidence, verification results, remaining work, or blockers.
+
+### VS Code Chat tools do not appear
+
+Run:
+
+```text
+MCP: Reset Cached Tools
+```
+
+Then reload VS Code. Confirm the `goalSystem` MCP server appears under `MCP: List Servers`.
 
 ### A stop is blocked
 

@@ -1,23 +1,26 @@
 # Architecture
 
-Copilot Goal System is a small state machine around GitHub Copilot CLI.
+Copilot Goal System is a small persisted state machine with host-specific adapters.
 
-It combines three Copilot surfaces:
+It has one shared core:
 
-- **Skill:** teaches the model the goal-mode behavior contract.
-- **SDK extension:** owns tools, persisted state, drift enforcement, and completion gates.
-- **CLI hooks:** restore context and control lifecycle edges that the model tends to forget.
+- `lib/goal-core.mjs` stores goals, validates completion, formats summaries, redacts sensitive text, and tracks persisted tool history.
+
+It has two adapters:
+
+- **Copilot CLI stable adapter:** skill, Copilot SDK tools, and CLI hooks.
+- **VS Code Chat preview adapter:** custom agent, MCP tools, and VS Code agent hooks.
 
 ## Data flow
 
 ```text
 User starts /goal
-  -> userPromptSubmitted hook injects any existing goal context
-  -> goal skill tells Copilot to use goal_system_* tools
-  -> SDK extension opens or updates persisted goal state
+  -> adapter injects sessionId/cwd and any existing goal context
+  -> skill or custom agent tells Copilot to use goal_system_* tools
+  -> SDK or MCP tool opens or updates persisted goal state
   -> post-tool hooks track tool history and drift
-  -> pre-tool hook denies stale non-goal tool calls after the threshold
-  -> agentStop hook blocks premature turn completion
+  -> pre-tool hooks deny stale non-goal tool calls after the threshold
+  -> stop hooks block premature turn completion
   -> goal_system_close enforces proof before complete
 ```
 
@@ -44,7 +47,7 @@ Same-directory continuation is intentionally conservative:
 - one open goal: allow explicit continuation from that persisted record
 - two or more open goals: refuse automatic continuation and ask for the intended session or goal id
 
-Subagents do not get goal ownership. Lifecycle hooks give them a boundary message, SDK goal tools reject subagent-looking invocations, and post-tool history ignores subagent tool use. A main session may record subagent output only after checking the real evidence.
+Subagents do not get goal ownership. Lifecycle hooks give them a boundary message, SDK goal tools reject subagent-looking invocations, VS Code Chat hooks do not expose goal state to subagents, and post-tool history ignores subagent tool use. A main session may record subagent output only after checking the real evidence.
 
 ## Goal record
 
@@ -93,9 +96,33 @@ Durable evidence fields append by default. `remaining` and `blockers` replace by
 
 `closedAt` prevents terminal blocked goals from resurrecting as open goals.
 
+## Adapters
+
+### Copilot CLI
+
+The CLI adapter uses:
+
+- `skills/goal/SKILL.md`
+- `extension.mjs`
+- `hooks/goal-context.sh`
+- `~/.copilot/settings.json`
+
+The SDK extension exposes `goal_system_*` tools and owns in-session drift counters. The shell hook restores goal context, writes compact snapshots, blocks `agentStop`, and keeps subagents outside goal ownership.
+
+### VS Code Copilot Chat
+
+The VS Code Chat adapter uses:
+
+- `adapters/vscode-chat/agents/goal-system.agent.md`
+- `adapters/vscode-chat/hooks/goal-system.json`
+- `adapters/vscode-chat/hook-runner.mjs`
+- `adapters/vscode-chat/mcp-server.mjs`
+
+VS Code hooks inject `sessionId` and `cwd` into the chat context. MCP tools require those values so multiple sessions in one workspace stay isolated. Persisted tool history drives drift enforcement across VS Code hook invocations.
+
 ## Drift enforcement
 
-The extension tracks non-goal tool calls while a goal is open.
+Adapters track non-goal tool calls while a goal is open.
 
 | Count since update | Behavior |
 |--------------------|----------|
@@ -103,7 +130,7 @@ The extension tracks non-goal tool calls while a goal is open.
 | 3-4 | Prompt-level warning. |
 | 5+ | `onPreToolUse` denies the next non-goal tool call. |
 
-`goal_system_status`, `goal_system_open`, `goal_system_update`, and `goal_system_close` do not count toward drift.
+`goal_system_status`, `goal_system_open`, `goal_system_update`, and `goal_system_close` do not count toward drift, including MCP-prefixed tool names in VS Code.
 
 ## Completion gate
 
@@ -130,7 +157,9 @@ Subagents are useful for bounded inspection or test runs, but they do not own th
 The system protects this in two places:
 
 - CLI `subagentStart` hook injects a boundary message without full goal state.
+- VS Code `SubagentStart` hook injects the same boundary message without full goal state.
 - SDK goal tools return failure when invocation metadata looks like a subagent.
+- VS Code MCP goal tools require the main session `sessionId` and `cwd` from hook context.
 
 The main session must verify subagent output before recording it as goal evidence.
 

@@ -1,9 +1,9 @@
 {
   "name": "copilot-goal-system",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "type": "module",
   "private": false,
-  "description": "Manual goal mode with persisted state, drift blocking, and proof-based completion for GitHub Copilot CLI.",
+  "description": "Manual goal mode with persisted state, drift blocking, and proof-based completion for GitHub Copilot CLI and VS Code Copilot Chat.",
   "license": "MIT",
   "author": "Soroush Yousefpour",
   "repository": {
@@ -17,6 +17,8 @@
   "keywords": [
     "github-copilot",
     "copilot-cli",
+    "vscode",
+    "copilot-chat",
     "goal",
     "agent",
     "hooks",
@@ -28,7 +30,7 @@
   },
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check extension.mjs && node --check lib/goal-core.mjs && node --check scripts/install.mjs && node --check scripts/check-release.mjs && bash -n install.sh && bash -n scripts/install.sh && bash -n hooks/goal-context.sh && jq . package.json plugin.json hooks.json .github/hooks/goal-system.json >/dev/null",
+    "check": "node --check extension.mjs && node --check lib/goal-core.mjs && node --check adapters/vscode-chat/hook-runner.mjs && node --check adapters/vscode-chat/mcp-server.mjs && node --check scripts/install.mjs && node --check scripts/check-release.mjs && bash -n install.sh && bash -n scripts/install.sh && bash -n hooks/goal-context.sh && jq . package.json plugin.json hooks.json .github/hooks/goal-system.json adapters/vscode-chat/hooks/goal-system.json >/dev/null",
     "verify": "npm run check && npm run release:check && npm test",
     "release:check": "node scripts/check-release.mjs",
     "vscode:prepare": "npm --prefix vscode-extension run prepare:bundle",
@@ -37,7 +39,8 @@
     "vscode:publish": "npm --prefix vscode-extension run publish"
   },
   "dependencies": {
-    "@github/copilot-sdk": "0.3.0"
-  },
-  "devDependencies": {}
+    "@github/copilot-sdk": "0.3.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.25.76"
+  }
 }

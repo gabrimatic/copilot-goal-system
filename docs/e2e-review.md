@@ -4,6 +4,8 @@ Use this checklist after installing into your real `~/.copilot` profile.
 
 ## Runtime checks
 
+### Copilot CLI
+
 - `/env` shows the goal-system extension or plugin surface.
 - `/skills info goal` shows the goal skill.
 - Starting `/goal <real task>` creates a persisted goal instead of only acknowledging the skill.
@@ -13,6 +15,16 @@ Use this checklist after installing into your real `~/.copilot` profile.
 - Trying to stop with an open goal is blocked by the hook.
 - `goal_system_close` refuses `complete` when required evidence is missing.
 - `goal_system_close` accepts `complete` only after inspection, resolution, verification, coverage, no remaining work, no blockers, and completion audit are recorded.
+
+### VS Code Copilot Chat
+
+- `MCP: List Servers` shows `goalSystem`.
+- `MCP: Reset Cached Tools` refreshes the `goal_system_*` tools after install or update.
+- The `Goal System` custom agent appears in Copilot Chat.
+- The `GitHub Copilot Chat Hooks` output channel shows goal hooks running.
+- Starting `/goal <real task>` through the `Goal System` custom agent creates a persisted goal with the injected `sessionId` and `cwd`.
+- `Stop` blocks while an open goal remains active.
+- `SubagentStart` gives subagents the boundary text without full goal details.
 
 ## Fixture prompt
 
@@ -26,4 +38,4 @@ The fixture project has a real failing test. The live session should inspect it,
 
 ## Known limits
 
-Local tests cannot prove a specific Copilot CLI build invokes every SDK hook. Verify `/env`, hook registration, and one real `/goal` session after installing.
+Local tests cannot prove a specific Copilot CLI or VS Code build invokes every documented hook. Verify `/env`, MCP server registration, hook output, and one real `/goal` session after installing.

@@ -16,9 +16,14 @@ function fail(message) {
 
 const rootPackage = await readJson("package.json");
 const vscodePackage = await readJson("vscode-extension/package.json");
+const pluginPackage = await readJson("plugin.json");
 
 if (rootPackage.version !== vscodePackage.version) {
   fail(`Version mismatch: package.json is ${rootPackage.version}, vscode-extension/package.json is ${vscodePackage.version}.`);
+}
+
+if (rootPackage.version !== pluginPackage.version) {
+  fail(`Version mismatch: package.json is ${rootPackage.version}, plugin.json is ${pluginPackage.version}.`);
 }
 
 if (rootPackage.name !== vscodePackage.name) {

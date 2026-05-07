@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0
+
+- Adds `Copilot Goal System: Install Recommended Setup` for CLI plus VS Code Chat setup.
+- Adds separate CLI-only and VS Code Chat-only install commands.
+- Adds status checks for the VS Code Chat custom agent, hook config, MCP server, and MCP user config.
+- Updates walkthrough and Marketplace copy for VS Code Copilot Chat preview support.
+
 ## 1.0.2
 
 - Adds a compact status bar item for installed, missing, installing, and error states.
