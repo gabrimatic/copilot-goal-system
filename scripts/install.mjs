@@ -76,7 +76,9 @@ function selectedTargets(target) {
 
 async function readJsonIfExists(filePath) {
   try {
-    return JSON.parse(await readFile(filePath, "utf8"));
+    const raw = await readFile(filePath, "utf8");
+    if (!raw.trim()) return {};
+    return JSON.parse(raw);
   } catch (error) {
     if (error.code === "ENOENT") return {};
     if (error instanceof SyntaxError) {

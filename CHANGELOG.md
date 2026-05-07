@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.2
+
+- Treats empty Copilot `settings.json` and VS Code `mcp.json` files as empty objects during install or update.
+- Keeps malformed non-empty JSON protected: the installer still refuses to overwrite it.
+
 ## 1.1.1
 
 - Adds evidence-backed `issueResolutions` so renamed, merged, duplicate, superseded, or clearer-worded discovered issues can close without brittle literal string matching.

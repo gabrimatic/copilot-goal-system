@@ -86,7 +86,7 @@ Restart Copilot CLI:
 | `~/.copilot/settings.json` | Hook entries are merged into existing settings. |
 | `~/.copilot/copilot-instructions.md` | A short goal-system reminder is appended once. |
 
-The installer preserves existing settings. It appends missing goal hooks and leaves unrelated hooks alone.
+The installer preserves existing settings. It appends missing goal hooks and leaves unrelated hooks alone. Empty JSON config files are initialized as empty objects; malformed non-empty JSON is refused so existing data is not overwritten.
 
 ## Hook entries
 

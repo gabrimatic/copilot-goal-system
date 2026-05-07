@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.2
+
+- Treats an empty VS Code `mcp.json` file as an empty MCP config when installing or updating local files.
+- Preserves the existing refusal behavior for malformed non-empty JSON.
+
 ## 1.1.1
 
 - Prompts to update local Copilot runtime files when the extension bundle is newer than `~/.copilot/extensions/goal-system/`.

@@ -94,3 +94,21 @@ test("installer refuses corrupt settings instead of overwriting them", async () 
 
   await rm(home, { recursive: true, force: true });
 });
+
+test("installer treats an empty settings file as an empty settings object", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-empty-json-"));
+  const copilotDir = path.join(home, ".copilot");
+  await execFileAsync("mkdir", ["-p", copilotDir]);
+  await writeFile(path.join(copilotDir, "settings.json"), "");
+
+  await execFileAsync(process.execPath, [installer], {
+    cwd: root,
+    env: { ...process.env, HOME: home },
+    maxBuffer: 1024 * 1024 * 8,
+  });
+
+  const settings = JSON.parse(await readFile(path.join(copilotDir, "settings.json"), "utf8"));
+  assert.equal(settings.hooks.agentStop.some((hook) => hook.bash === "$HOME/.copilot/hooks/goal-context.sh"), true);
+
+  await rm(home, { recursive: true, force: true });
+});

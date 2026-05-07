@@ -79,3 +79,22 @@ test("installer refuses corrupt VS Code MCP config instead of overwriting it", a
 
   await rm(home, { recursive: true, force: true });
 });
+
+test("installer treats an empty VS Code MCP config as an empty MCP object", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "goal-vscode-install-empty-json-"));
+  const mcpConfigPath = path.join(home, "Code", "User", "mcp.json");
+  await execFileAsync("mkdir", ["-p", path.dirname(mcpConfigPath)]);
+  await writeFile(mcpConfigPath, "");
+
+  await execFileAsync(process.execPath, [installer, "--target", "vscode-chat", "--vscode-mcp-config", mcpConfigPath], {
+    cwd: root,
+    env: { ...process.env, HOME: home },
+    maxBuffer: 1024 * 1024 * 12,
+  });
+
+  const mcpConfig = JSON.parse(await readFile(mcpConfigPath, "utf8"));
+  assert.equal(mcpConfig.servers.goalSystem.type, "stdio");
+  assert.match(mcpConfig.servers.goalSystem.args[0], /mcp-server\.mjs/);
+
+  await rm(home, { recursive: true, force: true });
+});
