@@ -4,6 +4,7 @@ import {
   appendGoalHistory,
   buildDriftEnforcement,
   buildGoalPromptNote,
+  buildStopContinuationDirective,
   countToolDrift,
   formatGoalSummary,
   isGoalSystemToolName,
@@ -62,8 +63,20 @@ function canonicalEventName(input = {}) {
   if (lookup[raw.toLowerCase()]) return lookup[raw.toLowerCase()];
   if ("trigger" in input) return "PreCompact";
   if ("tool_name" in input || "toolName" in input) return "tool_response" in input || "toolResult" in input ? "PostToolUse" : "PreToolUse";
-  if ("agent_id" in input || "agentName" in input) return "stopReason" in input || "stop_reason" in input ? "SubagentStop" : "SubagentStart";
-  if ("stopReason" in input || "stop_reason" in input || "stop_hook_active" in input) return "Stop";
+  const hasStopSignal = [
+    "stopReason",
+    "stop_reason",
+    "finishReason",
+    "finish_reason",
+    "completionReason",
+    "completion_reason",
+    "terminationReason",
+    "termination_reason",
+    "stop_hook_active",
+    "stopHookActive",
+  ].some((key) => key in input);
+  if ("agent_id" in input || "agentName" in input) return hasStopSignal ? "SubagentStop" : "SubagentStart";
+  if (hasStopSignal) return "Stop";
   if ("prompt" in input) return "UserPromptSubmit";
   return "SessionStart";
 }
@@ -79,15 +92,7 @@ function isSubagentToolEvent(input = {}) {
 }
 
 function stopBlockReason(goal) {
-  return [
-    "Active persisted goal is still open for this main session.",
-    `Goal ID: ${goal.id || "unknown"}`,
-    `Objective: ${goal.objective || "unknown until inspected"}`,
-    `Remaining: ${(goal.remaining || []).slice(0, 4).join(" | ") || "none recorded"}`,
-    `Blockers: ${(goal.blockers || []).slice(0, 3).join(" | ") || "none recorded"}`,
-    "",
-    "Do not end the turn yet. Call goal_system_status, continue the remaining work, or close only after the required inspection evidence, resolved issues, verification results, requirement coverage, and completion audit are recorded. If truly blocked, close as blocked with exact blocker evidence.",
-  ].join("\n");
+  return buildStopContinuationDirective(goal);
 }
 
 function emptySessionContextNote(sessionId, cwd) {

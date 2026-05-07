@@ -97,7 +97,7 @@ Default behavior is strict:
 - Discovered issues can be **renamed, merged, deduplicated, superseded, or resolved under clearer wording** only with evidence-backed `issueResolutions`.
 - Completion requires **inspection evidence, validation proof, verification results, requirement coverage, no remaining work, no blockers, resolved or evidence-covered discovered issues, and a completion audit**.
 - Tool drift is controlled. After three non-goal tool calls without `goal_system_update`, Copilot gets a warning. After five, non-goal tools are denied until the goal is updated.
-- Stop hooks are blocked while an open goal remains active.
+- Stop hooks are blocked while an open goal remains active, with a hard continuation directive that tells Copilot to reload status, continue work, update persisted state, and close only with evidence.
 
 ## Install details
 

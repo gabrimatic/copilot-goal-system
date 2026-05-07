@@ -215,7 +215,7 @@ Compaction must not hurt continuity. Keep persisted goal state concise but compl
 
 After compaction or resume, reload the goal state before acting.
 
-If an active goal is still open at stop time, the hook should block the turn from ending. Continue work, update the goal, or close it as complete/blocked/cancelled with evidence. Do not treat a blocked stop as a nuisance to bypass.
+If an active goal is still open at stop time, the hook must block the turn from ending and issue a hard continuation directive. Treat that directive as the next user instruction: call `goal_system_status`, continue one concrete remaining item, update persisted state with evidence, and close only after completion/blockage/cancellation is proven. Do not answer with a final summary, ask for permission to continue, or bypass the guard by copying unresolved issue text into `resolvedIssues`.
 
 If a previous goal was closed as blocked or cancelled, do not resurrect it. A terminal goal has `closedAt`; start a new goal only when the user asks for a new or replacement goal.
 

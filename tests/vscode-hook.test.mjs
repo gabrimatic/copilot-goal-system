@@ -125,8 +125,39 @@ test("VS Code Stop blocks only the current session when an active goal is open",
   assert.equal(parsed.hookSpecificOutput.decision, "block");
   assert.match(parsed.hookSpecificOutput.reason, /Goal ID: goal-a/);
   assert.match(parsed.hookSpecificOutput.reason, /Objective: Objective A/);
+  assert.match(parsed.hookSpecificOutput.reason, /hard continuation directive/);
+  assert.match(parsed.hookSpecificOutput.reason, /goal_system_update/);
   assert.doesNotMatch(parsed.hookSpecificOutput.reason, /goal-b/);
   assert.doesNotMatch(parsed.hookSpecificOutput.reason, /Objective B/);
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("VS Code Stop treats alternate finish reason payloads as stop attempts", async () => {
+  const home = path.join(tmpdir(), `goal-vscode-hook-${process.pid}-finishreason`);
+  const cwd = path.join(home, "project");
+  await mkdir(cwd, { recursive: true });
+  await writeGoal(home, "session-finishreason", cwd, {
+    id: "goal-vscode-finishreason",
+    objective: "Objective finish reason",
+    remaining: ["continue after alternate finish reason"],
+  });
+
+  const result = await runHook(
+    {
+      sessionId: "session-finishreason",
+      cwd,
+      finishReason: "stop",
+    },
+    { HOME: home }
+  );
+
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.hookSpecificOutput.hookEventName, "Stop");
+  assert.equal(parsed.hookSpecificOutput.decision, "block");
+  assert.match(parsed.hookSpecificOutput.reason, /Goal ID: goal-vscode-finishreason/);
+  assert.match(parsed.hookSpecificOutput.reason, /hard continuation directive/);
+  assert.match(parsed.hookSpecificOutput.reason, /continue after alternate finish reason/);
 
   await rm(home, { recursive: true, force: true });
 });

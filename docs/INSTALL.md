@@ -229,7 +229,7 @@ Then reload VS Code. Confirm the `goalSystem` MCP server appears under `MCP: Lis
 
 ### A stop is blocked
 
-An open goal still exists. Continue the remaining work, or call `goal_system_close` as complete, blocked, or cancelled with evidence.
+An open goal still exists. Follow the continuation directive: call `goal_system_status`, continue the next concrete remaining item, update persisted state with evidence, or call `goal_system_close` as complete, blocked, or cancelled with evidence.
 
 ### npm install fails
 

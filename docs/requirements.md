@@ -12,7 +12,7 @@ It is successful only when it prevents drift, survives compaction, keeps subagen
 - Isolation: same-directory goals in different sessions must not silently merge.
 - Continuation: a single unambiguous same-directory open goal can be loaded only when the user asks to continue.
 - Drift control: the main session must update state after meaningful work and is blocked after too much stale progress.
-- Stop control: an open goal blocks agent stop until it is continued or closed with evidence.
+- Stop control: an open goal blocks agent stop and returns a hard continuation directive until the goal is continued or closed with evidence.
 - Completion control: complete goals require inspection evidence, validation proof, verification results, requirement coverage, no remaining work, no blockers, resolved or evidence-covered discovered issues, and a completion audit.
 - Privacy: source prompts and tool summaries are redacted before persistence.
 

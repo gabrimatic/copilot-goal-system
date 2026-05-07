@@ -109,8 +109,39 @@ test("agentStop blocks a premature stop while an active goal is still open", asy
 
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.decision, "block");
-  assert.match(parsed.reason, /Active persisted goal is still open/);
+  assert.match(parsed.reason, /STOP BLOCKED|Active persisted goal is still open/);
+  assert.match(parsed.reason, /hard continuation directive/);
   assert.match(parsed.reason, /goal_system_status/);
+  assert.match(parsed.reason, /goal_system_update/);
+  assert.match(parsed.reason, /goal_system_close only when/);
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("agentStop treats alternate finish reason payloads as stop attempts", async () => {
+  const home = path.join(tmpdir(), `goal-hook-${process.pid}-finishreason`);
+  const cwd = path.join(home, "project");
+  await mkdir(cwd, { recursive: true });
+  await writeGoal(home, "session-finishreason", cwd, {
+    id: "goal-finishreason",
+    remaining: ["continue after nonstandard stop reason"],
+  });
+
+  const result = await runHook(
+    {
+      sessionId: "session-finishreason",
+      timestamp: Date.now(),
+      cwd,
+      finishReason: "stop",
+    },
+    { HOME: home }
+  );
+
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.decision, "block");
+  assert.match(parsed.reason, /Goal ID: goal-finishreason/);
+  assert.match(parsed.reason, /hard continuation directive/);
+  assert.match(parsed.reason, /continue after nonstandard stop reason/);
 
   await rm(home, { recursive: true, force: true });
 });

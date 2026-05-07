@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.4
+
+- Strengthens stop-time continuation with a hard directive to reload status, continue work, update state, and close only with evidence.
+- Treats alternate stop payloads such as `finishReason`, `completionReason`, and `terminationReason` as stop attempts.
+- Reuses the same stop-continuation contract across CLI hooks and the VS Code Chat hook adapter.
+
 ## 1.1.3
 
 - Publishes the VS Code extension automatically from GitHub Actions when a `v*` tag is pushed.

@@ -8,6 +8,7 @@ import {
   GoalStore,
   appendGoalHistory,
   buildDriftEnforcement,
+  buildStopContinuationDirective,
   countToolDrift,
   createGoalRecord,
   formatGoalSummary,
@@ -40,6 +41,27 @@ test("redaction removes sensitive values from persisted previews and history", (
   assert.doesNotMatch(output, /person@example\.com/);
   assert.doesNotMatch(output, /hunter2/);
   assert.doesNotMatch(output, /ghp_/);
+});
+
+test("stop continuation directive forces real continuation without issue-string bypass", () => {
+  const goal = createGoalRecord(
+    {
+      objective: "Finish the release safely",
+      remaining: ["verify Marketplace publish", "update local runtime"],
+      blockers: ["waiting for Marketplace propagation"],
+      completionStatus: "active",
+    },
+    "session:stop",
+    "/tmp/project"
+  );
+
+  const directive = buildStopContinuationDirective(goal);
+  assert.match(directive, /STOP BLOCKED/);
+  assert.match(directive, /hard continuation directive/);
+  assert.match(directive, /Call goal_system_status/);
+  assert.match(directive, /Call goal_system_update/);
+  assert.match(directive, /Call goal_system_close only when/);
+  assert.match(directive, /do not bypass the guard by copying unresolved issue text/);
 });
 
 test("mergeGoal appends durable evidence but lets remaining and blockers be cleared", () => {

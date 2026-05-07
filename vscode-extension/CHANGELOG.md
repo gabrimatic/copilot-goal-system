@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.4
+
+- Strengthens blocked-stop behavior with a hard continuation directive.
+- Treats alternate stop payloads such as `finishReason`, `completionReason`, and `terminationReason` as stop attempts.
+- Keeps CLI and VS Code Chat stop behavior aligned.
+
 ## 1.1.3
 
 - Publishes from GitHub Actions automatically when a `v*` tag is pushed.

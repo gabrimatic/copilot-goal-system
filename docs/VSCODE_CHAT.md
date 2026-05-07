@@ -123,4 +123,4 @@ Open the `GitHub Copilot Chat Hooks` output channel in VS Code. If no goal hook 
 
 ### Stop is blocked
 
-An active goal is still open. Continue the remaining work or call `goal_system_close` as complete, blocked, or cancelled with exact evidence.
+An active goal is still open. The stop hook returns a hard continuation directive: reload `goal_system_status`, continue the next concrete remaining item, update persisted state with evidence, and call `goal_system_close` only as complete, blocked, or cancelled with exact evidence.

@@ -33,6 +33,10 @@ jq_has() {
   printf '%s' "$input" | jq -e "$filter" >/dev/null 2>&1
 }
 
+has_stop_signal() {
+  jq_has 'has("stopReason") or has("stop_reason") or has("finishReason") or has("finish_reason") or has("completionReason") or has("completion_reason") or has("terminationReason") or has("termination_reason") or has("stop_hook_active") or has("stopHookActive")'
+}
+
 infer_hook_event() {
   if [[ -n "$hook_event" ]]; then
     printf '%s' "$hook_event"
@@ -42,12 +46,12 @@ infer_hook_event() {
   if jq_has 'has("trigger") or has("customInstructions") or has("custom_instructions")'; then
     printf 'preCompact'
   elif jq_has 'has("agentName") or has("agent_name")'; then
-    if jq_has 'has("stopReason") or has("stop_reason")'; then
+    if has_stop_signal; then
       printf 'subagentStop'
     else
       printf 'subagentStart'
     fi
-  elif jq_has 'has("stopReason") or has("stop_reason")'; then
+  elif has_stop_signal; then
     printf 'agentStop'
   elif jq_has 'has("toolResult") or has("tool_result")'; then
     printf 'postToolUse'
@@ -196,10 +200,16 @@ case "$hook_event" in
 Active persisted goal is still open for this main session.
 Goal ID: $goal_id
 Objective: $objective
+Status: $status
 Remaining: $remaining
 Blockers: $blockers
 
-Do not end the turn yet. Use goal_system_status for authoritative state, then continue the remaining work or call goal_system_close only after the required inspection evidence, resolved issues, verification results, requirement coverage, and completion audit are recorded. If truly blocked, close as blocked with exact blocker evidence instead of stopping with an open goal.
+This is a hard continuation directive. Do not produce a final answer, do not ask for permission to continue, and do not bypass the guard by copying unresolved issue text into resolvedIssues.
+Your next actions must be:
+1. Call goal_system_status to reload authoritative state.
+2. Continue the next concrete remaining item. If remaining is empty but the goal is open, inspect the real state and update remaining or close with evidence.
+3. Call goal_system_update after meaningful inspection, fixes, blockers, verification, or remaining-work changes.
+4. Call goal_system_close only when completion, blockage, or cancellation is supported by exact evidence and the completion audit passes.
 EOF_REASON
 )
     jq -n --arg reason "$reason" '{decision: "block", reason: $reason}'

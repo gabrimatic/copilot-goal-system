@@ -135,6 +135,8 @@ Adapters track non-goal tool calls while a goal is open.
 
 `goal_system_status`, `goal_system_open`, `goal_system_update`, and `goal_system_close` do not count toward drift, including MCP-prefixed tool names in VS Code.
 
+Stop hooks use the same continuation contract in CLI and VS Code Chat: if the current main session still has an open goal, the hook blocks stop and tells the model to reload status, continue the next concrete remaining item, update persisted state, and close only with evidence. Alternate stop payloads such as `finishReason`, `completionReason`, and `terminationReason` are treated as stop attempts.
+
 ## Completion gate
 
 `goal_system_close` refuses `complete` unless the goal contains:
