@@ -69,6 +69,7 @@ Subagents do not get goal ownership. Lifecycle hooks give them a boundary messag
   "requirementCoverage": [],
   "inspectionEvidence": [],
   "discoveredIssues": [],
+  "issueResolutions": [],
   "resolvedIssues": [],
   "doneSoFar": [],
   "remaining": [],
@@ -82,6 +83,8 @@ Subagents do not get goal ownership. Lifecycle hooks give them a boundary messag
 Durable evidence fields append by default. `remaining` and `blockers` replace by explicit update so the main session can clear queues on purpose.
 
 `discoveredIssues` is additive because horizon tasks reveal work over time. If an inspection expands the task from three issues to ten, the full ten stay in the durable issue set. `remaining` is replaceable because it represents the current live queue, not a permanent history log.
+
+`issueResolutions` records safe issue evolution. A discovered issue can be marked `resolved`, `merged`, `renamed`, `duplicate`, or `superseded` only when the entry names the original issue and includes evidence. Wildcard references such as "all issues" are rejected, so the model cannot bypass the completion gate by manufacturing literal resolved strings.
 
 ## Status model
 
@@ -145,7 +148,7 @@ Adapters track non-goal tool calls while a goal is open.
 - completionAudit
 - empty remaining
 - empty blockers
-- no unresolved discovered issues
+- no unresolved discovered issues, except those covered by specific evidence-backed issue resolutions
 - action or verification evidence beyond claims
 
 Blocked and cancelled goals can close without completion proof, but the state should record the exact blocker or cancellation reason.

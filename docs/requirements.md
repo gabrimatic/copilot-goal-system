@@ -13,7 +13,7 @@ It is successful only when it prevents drift, survives compaction, keeps subagen
 - Continuation: a single unambiguous same-directory open goal can be loaded only when the user asks to continue.
 - Drift control: the main session must update state after meaningful work and is blocked after too much stale progress.
 - Stop control: an open goal blocks agent stop until it is continued or closed with evidence.
-- Completion control: complete goals require inspection evidence, validation proof, verification results, requirement coverage, no remaining work, no blockers, resolved discovered issues, and a completion audit.
+- Completion control: complete goals require inspection evidence, validation proof, verification results, requirement coverage, no remaining work, no blockers, resolved or evidence-covered discovered issues, and a completion audit.
 - Privacy: source prompts and tool summaries are redacted before persistence.
 
 ## State contract
@@ -31,6 +31,7 @@ Durable evidence fields append by default:
 - requirementCoverage
 - inspectionEvidence
 - discoveredIssues
+- issueResolutions
 - resolvedIssues
 - doneSoFar
 - completionAudit
@@ -41,6 +42,8 @@ Mutable queues replace by explicit update:
 - blockers
 
 This split prevents partial updates from erasing proof while still allowing the model to intentionally clear outstanding work.
+
+`issueResolutions` is for issue evolution, not shortcut completion. Entries must name the original discovered issue, use one of `resolved`, `merged`, `renamed`, `duplicate`, or `superseded`, and include evidence for why the original issue no longer remains open.
 
 ## Completion gate
 
@@ -55,7 +58,7 @@ This split prevents partial updates from erasing proof while still allowing the 
 - completionAudit is recorded
 - remaining is empty
 - blockers is empty
-- every discovered issue is listed in resolvedIssues
+- every discovered issue is listed in resolvedIssues or covered by a specific evidence-backed issue resolution
 - there is action or verification evidence beyond claims
 
 Blocked and cancelled goals may close without satisfying completion proof, but they must carry exact blocker or cancellation evidence in the summary and persisted fields.

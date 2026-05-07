@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1
+
+- Prompts to update local Copilot runtime files when the extension bundle is newer than `~/.copilot/extensions/goal-system/`.
+- Adds status report fields for extension version, installed runtime version, and runtime update state.
+- Adds evidence-backed issue-resolution support for safer goal completion when discovered issues are renamed, merged, duplicated, superseded, or clarified.
+
 ## 1.1.0
 
 - Adds `Copilot Goal System: Install Recommended Setup` for CLI plus VS Code Chat setup.

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.1
+
+- Adds evidence-backed `issueResolutions` so renamed, merged, duplicate, superseded, or clearer-worded discovered issues can close without brittle literal string matching.
+- Rejects wildcard, target-only, or unevidenced issue-resolution entries during completion.
+- Prompts VS Code users to update local Copilot runtime files after extension updates when `~/.copilot/extensions/goal-system/` is stale.
+- Updates status reporting, docs, and tests for runtime update checks.
+
 ## 1.1.0
 
 - Adds a VS Code Copilot Chat preview adapter with custom agent, VS Code lifecycle hooks, and local MCP goal tools.

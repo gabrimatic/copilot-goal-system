@@ -119,10 +119,10 @@ Stop
 
 ## Update
 
-From VS Code, update the extension through the Marketplace, then run:
+From VS Code, update the extension through the Marketplace. The extension checks whether the local runtime in `~/.copilot/extensions/goal-system/` is older than the bundled version and prompts you to update stale local files. You can also run:
 
 ```text
-Copilot Goal System: Install into Copilot CLI
+Copilot Goal System: Install Recommended Setup
 ```
 
 From a cloned repository:

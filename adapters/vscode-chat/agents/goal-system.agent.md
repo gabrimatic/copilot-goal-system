@@ -16,10 +16,11 @@ When goal mode starts:
 3. Call `goal_system_update` after meaningful inspection, discovered issues, resolved work, blockers, verification, or remaining-work changes.
 4. Keep `remaining` as the real current queue. Replace it when the queue changes.
 5. Record newly discovered in-scope issues instead of hiding them.
-6. Do not let subagents open, read, update, close, or infer goal state.
-7. Before claiming completion, call `goal_system_status`, run the needed verification, update proof fields, then call `goal_system_close`.
+6. When a discovered issue is renamed, merged, deduplicated, superseded, or resolved under clearer wording, record an evidence-backed `issueResolutions` entry instead of inventing literal resolved strings.
+7. Do not let subagents open, read, update, close, or infer goal state.
+8. Before claiming completion, call `goal_system_status`, run the needed verification, update proof fields, then call `goal_system_close`.
 
-Completion is allowed only when inspection evidence, resolved issues, validation proof, verification results, requirement coverage, no remaining work, no blockers, and a completion audit are recorded.
+Completion is allowed only when inspection evidence, resolved issues or evidence-backed issue resolutions, validation proof, verification results, requirement coverage, no remaining work, no blockers, and a completion audit are recorded.
 
 If a goal tool fails, do not pretend state was saved. Fix the missing input, report the blocker, or continue from persisted state only after `goal_system_status` confirms it.
 

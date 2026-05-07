@@ -148,6 +148,121 @@ test("dynamic horizon tasks can grow discovered issues and must resolve all befo
   assert.deepEqual(validateGoalCompletion(complete), []);
 });
 
+test("evidence-backed issue resolutions can close renamed or merged discovered issues", () => {
+  const goal = createGoalRecord(
+    {
+      objective: "Make closure audit smarter without weakening safety",
+      requirements: ["do not require literal resolved issue strings", "keep completion proof strict"],
+      inspectionEvidence: ["reproduced literal string mismatch in getOutstandingIssues"],
+      discoveredIssues: [
+        "ISSUE-001: close audit requires exact original issue text in resolvedIssues",
+        "ISSUE-002: merged duplicate issues cannot be represented safely",
+      ],
+      resolvedIssues: ["implemented evidence-aware closure audit for renamed and merged issues"],
+      issueResolutions: [
+        {
+          covers: ["ISSUE-001"],
+          status: "resolved",
+          resolution: "Added issue resolution coverage so the resolved issue wording can differ from the original discovered issue.",
+          evidence: ["node --test tests/goal-core.test.mjs"],
+        },
+        {
+          covers: ["ISSUE-002"],
+          status: "merged",
+          resolution: "Covered duplicate and merged issue closure through the same evidence-backed resolution map.",
+          evidence: ["node --test tests/goal-core.test.mjs"],
+        },
+      ],
+      validationProof: ["node --test tests/goal-core.test.mjs"],
+      verificationResults: ["targeted goal-core tests passed"],
+      requirementCoverage: [
+        "do not require literal resolved issue strings covered by ISSUE-001 issueResolutions",
+        "keep completion proof strict covered by required evidence on each issue resolution",
+      ],
+      doneSoFar: ["added closure audit coverage mapping"],
+      remaining: [],
+      blockers: [],
+      completionAudit: ["all discovered issues are either directly resolved or covered by evidence-backed issueResolutions"],
+    },
+    "session:issue-resolution",
+    "/tmp/project"
+  );
+
+  assert.deepEqual(getOutstandingIssues(goal), []);
+  assert.deepEqual(validateGoalCompletion(goal), []);
+});
+
+test("issue resolutions do not permit wildcard or unevidenced completion claims", () => {
+  const goal = createGoalRecord(
+    {
+      objective: "Reject fake issue closure",
+      requirements: ["prevent cheating"],
+      inspectionEvidence: ["read current issue list"],
+      discoveredIssues: ["ISSUE-001: fake completion can pass", "ISSUE-002: wildcard closure hides remaining work"],
+      issueResolutions: [
+        {
+          covers: ["all"],
+          status: "resolved",
+          resolution: "Everything is fixed.",
+          evidence: ["done"],
+        },
+        {
+          covers: ["ISSUE-001"],
+          status: "resolved",
+          resolution: "Claimed fixed without proof.",
+          evidence: [],
+        },
+      ],
+      validationProof: ["node --test tests/goal-core.test.mjs"],
+      verificationResults: ["targeted test failed before fix"],
+      requirementCoverage: ["prevent cheating covered by issue resolution validation"],
+      doneSoFar: ["added negative test"],
+      remaining: [],
+      blockers: [],
+      completionAudit: ["attempted fake closure should be refused"],
+    },
+    "session:issue-resolution-negative",
+    "/tmp/project"
+  );
+
+  const failures = validateGoalCompletion(goal).join("\n");
+  assert.match(failures, /Issue resolution 1 uses wildcard coverage/);
+  assert.match(failures, /Issue resolution 2 has no evidence/);
+  assert.match(failures, /Discovered issues remain unresolved/);
+});
+
+test("issue resolution target text does not count as original issue coverage", () => {
+  const goal = createGoalRecord(
+    {
+      objective: "Keep issue resolution mapping honest",
+      requirements: ["target issue cannot hide missing original issue reference"],
+      inspectionEvidence: ["read issue resolution schema"],
+      discoveredIssues: ["ISSUE-001: original issue still needs explicit coverage"],
+      issueResolutions: [
+        {
+          target: "ISSUE-001: original issue still needs explicit coverage",
+          status: "merged",
+          resolution: "Merged into a broader resolved issue.",
+          evidence: ["node --test tests/goal-core.test.mjs"],
+        },
+      ],
+      validationProof: ["node --test tests/goal-core.test.mjs"],
+      verificationResults: ["targeted test fails before fix"],
+      requirementCoverage: ["target issue cannot hide missing original issue reference covered by validation"],
+      doneSoFar: ["added target-only negative test"],
+      remaining: [],
+      blockers: [],
+      completionAudit: ["target-only coverage should be refused"],
+    },
+    "session:issue-resolution-target",
+    "/tmp/project"
+  );
+
+  const failures = validateGoalCompletion(goal).join("\n");
+  assert.match(failures, /Issue resolution 1 does not name the discovered issue it covers/);
+  assert.match(failures, /Discovered issues remain unresolved/);
+});
+
 test("closedAt makes terminal blocked goals stop loading as open goals", () => {
   const openBlocked = createGoalRecord(
     {

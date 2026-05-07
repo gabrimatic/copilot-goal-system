@@ -33,6 +33,8 @@ Covered:
 - intentional clearing of `remaining` and `blockers`
 - refusal of weak completion evidence
 - unresolved discovered issue blocking
+- evidence-backed issue resolutions for renamed, merged, duplicate, superseded, or clearer-worded issues
+- rejection of wildcard, target-only, or unevidenced issue-resolution claims
 - closed terminal blocked-goal handling
 - multi-session and multi-directory state isolation
 - same-directory ambiguity detection
@@ -48,6 +50,7 @@ Covered:
 - VS Code Chat stop blocking
 - VS Code Chat persisted drift tracking
 - VS Code Chat installer MCP merge behavior
+- VS Code extension runtime update-state detection
 
 ## Fixture sanity check
 

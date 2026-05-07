@@ -41,6 +41,8 @@ MCP: Reset Cached Tools
 
 Then select the `Goal System` custom agent in Copilot Chat.
 
+After Marketplace extension updates, VS Code compares the bundled runtime version with the local files in `~/.copilot/extensions/goal-system/`. If local files are stale, the status bar changes to `Goal Update` and VS Code prompts you to update them.
+
 ## Installed Files
 
 | Path | Purpose |
@@ -68,6 +70,8 @@ The VS Code Chat adapter uses official VS Code hook events:
 | `Stop` | Blocks premature completion while an active goal remains open. |
 
 Goal state remains isolated by `sessionId` and `cwd`. Multiple same-directory sessions do not silently merge.
+
+Renamed, merged, duplicate, superseded, and clearer-worded discovered issues must be recorded as evidence-backed `issueResolutions`. They do not disappear from completion checks just because the wording changed.
 
 ## MCP Tools
 

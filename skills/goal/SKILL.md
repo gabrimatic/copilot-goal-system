@@ -89,6 +89,7 @@ Maintain a persisted Active Goal with these fields:
 - Validation/proof plan
 - Inspection evidence
 - Discovered in-scope issues
+- Issue resolutions
 - Resolved in-scope issues
 - Verification results
 - Requirement coverage
@@ -103,7 +104,7 @@ If `goal_system_status`, `goal_system_open`, `goal_system_update`, and `goal_sys
 Use the state tools as a strict state machine:
 
 - `goal_system_open`: create or replace a goal only when the user clearly starts or replaces a goal.
-- `goal_system_update`: record verified facts, requirements, inspection evidence, discovered issues, fixes, validation, remaining work, and blockers. Do not use empty updates, vague progress notes, or history-only updates.
+- `goal_system_update`: record verified facts, requirements, inspection evidence, discovered issues, issue resolutions, fixes, validation, remaining work, and blockers. Do not use empty updates, vague progress notes, or history-only updates.
 - `goal_system_status`: reload authoritative state before continuation or completion claims.
 - `goal_system_close`: close only after real evidence proves completion, blockage, or cancellation.
 
@@ -114,6 +115,7 @@ Do not mark a goal complete through `goal_system_update`.
 When a goal is active, call `goal_system_update` after every meaningful step:
 - After inspecting the environment (record inspectionEvidence)
 - After discovering an issue (record discoveredIssues)
+- After renaming, merging, deduplicating, or superseding a discovered issue (record issueResolutions with evidence)
 - After fixing an issue (record resolvedIssues, doneSoFar)
 - After running tests or checks (record verificationResults)
 - After completing a phase of work (update remaining)
@@ -187,6 +189,17 @@ Work in this loop until the goal is complete, cancelled, or truly blocked:
 Do not let a passing proxy check replace the real requirement. For example, a build passing does not prove every UI state was visually inspected; a lint pass does not prove an end-to-end flow works.
 
 When new issues are discovered mid-run, do not treat them as scope creep if they are required to satisfy the original goal. Add them to `discoveredIssues`, refresh `remaining`, and keep going. The remaining queue is a live queue, not a promise that the first checklist was complete.
+
+## Issue resolution semantics
+
+Discovered issues are allowed to evolve as understanding improves, but they must not disappear casually. If an issue is renamed, merged into a better issue, deduplicated, superseded, or resolved under a clearer description, record an `issueResolutions` entry with:
+
+- the specific original issue text or issue ID
+- the resolution status: `resolved`, `merged`, `renamed`, `duplicate`, or `superseded`
+- a target issue or resolved issue when there is one
+- concrete evidence explaining why the original issue no longer remains open
+
+Never use wildcard issue references such as "all", "everything", or "all issues". Never close a goal by manufacturing literal resolved strings to satisfy a brittle checklist. The safe path is to preserve the original discovered issue, record the real relationship, and include proof that the underlying problem is handled.
 
 ## Continuation and compaction
 
@@ -331,19 +344,21 @@ Before declaring success, reload the goal state and answer:
 5. What did I change?
 6. What issues were found?
 7. Were all discovered in-scope issues fixed?
-8. What checks were run?
-9. What passed?
-10. What failed?
-11. What remains unresolved?
-12. Is every unresolved item a real blocker?
-13. Does the final state prove the original objective and every explicit requirement are satisfied?
+8. Are renamed, merged, duplicate, or superseded issues covered by evidence-backed issue resolutions?
+9. What checks were run?
+10. What passed?
+11. What failed?
+12. What remains unresolved?
+13. Is every unresolved item a real blocker?
+14. Does the final state prove the original objective and every explicit requirement are satisfied?
 
 If any answer is uncertain and matters, the goal is not complete.
 
 The persisted goal state must agree before completion:
 
 - inspection evidence is recorded
-- discovered issues are resolved
+- discovered issues are resolved or covered by specific evidence-backed issue resolutions
+- issue resolutions, when present, name concrete issue references and contain evidence
 - validation/proof is recorded
 - verification results are recorded
 - requirement coverage is recorded

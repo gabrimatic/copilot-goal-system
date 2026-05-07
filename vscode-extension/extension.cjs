@@ -6,6 +6,11 @@ const fsp = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const vscode = require("vscode");
+const EXTENSION_PACKAGE = require("./package.json");
+const {
+  runtimeUpdatePromptKey,
+  runtimeVersionState,
+} = require("./lib/runtime-version.cjs");
 
 const DISPLAY_NAME = "Copilot Goal System";
 const DOCS_URL = "https://github.com/gabrimatic/copilot-goal-system#readme";
@@ -53,8 +58,8 @@ function activate(context) {
 
   updateStatusBar(statusBar, output);
   setTimeout(() => {
-    maybeOfferFirstInstall(context, output, statusBar).catch((error) => {
-      output.appendLine(`First-run setup check failed: ${error.message || String(error)}`);
+    runActivationPrompts(context, output, statusBar).catch((error) => {
+      output.appendLine(`Activation setup check failed: ${error.message || String(error)}`);
     });
   }, 1500);
 }
@@ -136,6 +141,11 @@ async function readJson(filePath) {
   return JSON.parse(raw);
 }
 
+async function readPackageVersion(filePath) {
+  const packageJson = await readJson(filePath);
+  return String(packageJson.version || "").trim();
+}
+
 function hookInstalled(settings, eventName) {
   const hooks = settings && settings.hooks && Array.isArray(settings.hooks[eventName]) ? settings.hooks[eventName] : [];
   return hooks.some((hook) => hook && hook.type === "command" && hook.bash === "$HOME/.copilot/hooks/goal-context.sh");
@@ -164,12 +174,31 @@ function missingChecks(status) {
 
 async function collectStatus() {
   const paths = installedPaths();
+  const bundledVersion = String(EXTENSION_PACKAGE.version || "0.0.0").trim();
+  const installedPackagePath = path.join(paths.extensionDir, "package.json");
+  const installedPackagePresent = await exists(installedPackagePath);
+  let installedVersion = "";
+  let installedPackageError = "";
   let settings = null;
   let settingsError = "";
   let vscodeHookConfig = null;
   let vscodeHookConfigError = "";
   let mcpConfig = null;
   let mcpConfigError = "";
+
+  if (installedPackagePresent) {
+    try {
+      installedVersion = await readPackageVersion(installedPackagePath);
+    } catch (error) {
+      installedPackageError = error && error.message ? error.message : "installed package.json could not be parsed";
+    }
+  }
+
+  const runtimeState = runtimeVersionState({
+    bundledVersion,
+    installedPackagePresent,
+    installedVersion,
+  });
 
   if (await exists(paths.settingsFile)) {
     try {
@@ -199,8 +228,12 @@ async function collectStatus() {
 
   return {
     paths,
+    bundledVersion,
+    installedVersion,
+    runtimeState,
     checks: [
-      ["Extension package", await exists(path.join(paths.extensionDir, "package.json"))],
+      ["Extension package", installedPackagePresent && !installedPackageError],
+      ["Local runtime version", !runtimeState.needsUpdate && !installedPackageError],
       ["Production dependencies", await exists(paths.sdkPackage)],
       ["Goal skill", await exists(paths.skillFile)],
       ["CLI hook helper", await exists(paths.hookFile)],
@@ -215,6 +248,7 @@ async function collectStatus() {
     cliHookEventsPresent,
     vscodeHookConfigInstalled: vscodeHookConfigInstalled(vscodeHookConfig),
     mcpServerConfigured: mcpServerInstalled(mcpConfig),
+    installedPackageError,
     settingsError,
     vscodeHookConfigError,
     mcpConfigError,
@@ -238,6 +272,9 @@ function formatStatusReport(status) {
     "",
     `Home: ${status.paths.home}`,
     `Installed package: ${status.paths.extensionDir}`,
+    `Extension version: ${status.bundledVersion}`,
+    `Installed runtime version: ${status.installedVersion || (status.runtimeState.installed ? "unknown" : "missing")}`,
+    `Runtime files: ${status.runtimeState.status === "current" ? "Current" : "Update needed"}`,
     `Result: ${installed ? "Installed" : "Setup needed"}`,
     "",
     "Checks:",
@@ -250,6 +287,9 @@ function formatStatusReport(status) {
 
   if (status.settingsError) {
     lines.push("", `Settings error: ${status.settingsError}`);
+  }
+  if (status.installedPackageError) {
+    lines.push("", `Installed package error: ${status.installedPackageError}`);
   }
   if (status.vscodeHookConfigError) {
     lines.push("", `VS Code hook config error: ${status.vscodeHookConfigError}`);
@@ -265,6 +305,8 @@ function formatStatusReport(status) {
   lines.push("", "Next steps:");
   if (installed) {
     lines.push("- Restart Copilot CLI after updates.", "- Run /skills reload", "- Run /env", "- In VS Code, run MCP: Reset Cached Tools or reload the window.");
+  } else if (status.runtimeState.status === "stale") {
+    lines.push("- Run Copilot Goal System: Install Recommended Setup to update local files.", "- Restart Copilot CLI.", "- Reload VS Code or run MCP: Reset Cached Tools.");
   } else {
     lines.push("- Run Copilot Goal System: Install Recommended Setup.", "- Restart Copilot CLI.", "- Reload VS Code or run MCP: Reset Cached Tools.");
   }
@@ -281,20 +323,36 @@ async function showInstallStatus(output, statusBar) {
   await updateStatusBar(statusBar, output, status);
 
   const allOk = statusIsInstalled(status);
-  const actions = allOk ? ["Open Docs", "Open State Folder"] : ["Install Recommended Setup", "Install CLI Only", "Install VS Code Chat Only", "Open Walkthrough"];
+  const updateNeeded = status.runtimeState.status === "stale";
+  const actions = allOk
+    ? ["Open Docs", "Open State Folder"]
+    : updateNeeded
+      ? ["Update Local Files", "Show Details", "Open Walkthrough"]
+      : ["Install Recommended Setup", "Install CLI Only", "Install VS Code Chat Only", "Open Walkthrough"];
   const result = await vscode.window.showInformationMessage(
-    allOk ? "Copilot Goal System is installed." : "Copilot Goal System is not fully installed.",
+    allOk
+      ? "Copilot Goal System is installed."
+      : updateNeeded
+        ? "Copilot Goal System local files need an update."
+        : "Copilot Goal System is not fully installed.",
     ...actions
   );
 
   if (result === "Open Docs") await openDocs();
   if (result === "Open State Folder") await revealPath(status.paths.stateRoot, "Goal state folder");
+  if (result === "Show Details") output.show(true);
   if (result === "Open Walkthrough") await openWalkthrough();
+  if (result === "Update Local Files") await vscode.commands.executeCommand("copilotGoalSystem.install");
   if (result === "Install Recommended Setup") {
     await vscode.commands.executeCommand("copilotGoalSystem.install");
   }
   if (result === "Install CLI Only") await vscode.commands.executeCommand("copilotGoalSystem.installCli");
   if (result === "Install VS Code Chat Only") await vscode.commands.executeCommand("copilotGoalSystem.installVscodeChat");
+}
+
+async function runActivationPrompts(context, output, statusBar) {
+  await maybeOfferFirstInstall(context, output, statusBar);
+  await maybeOfferRuntimeUpdate(context, output, statusBar);
 }
 
 async function maybeOfferFirstInstall(context, output, statusBar) {
@@ -303,6 +361,7 @@ async function maybeOfferFirstInstall(context, output, statusBar) {
 
   const status = await collectStatus();
   await updateStatusBar(statusBar, output, status);
+  if (status.runtimeState.status === "stale") return;
   const allOk = statusIsInstalled(status);
   if (allOk) {
     await context.globalState.update(FIRST_INSTALL_PROMPT_KEY, true);
@@ -328,6 +387,33 @@ async function maybeOfferFirstInstall(context, output, statusBar) {
   }
 }
 
+async function maybeOfferRuntimeUpdate(context, output, statusBar) {
+  if (installInProgress || !config().get("promptOnUpdate", true)) return;
+
+  const status = await collectStatus();
+  await updateStatusBar(statusBar, output, status);
+  if (status.runtimeState.status !== "stale") return;
+
+  const promptKey = runtimeUpdatePromptKey(status.paths.home, status.bundledVersion);
+  if (context.globalState.get(promptKey)) return;
+
+  const choice = await vscode.window.showInformationMessage(
+    `Copilot Goal System ${status.bundledVersion} includes updated local runtime files. Installed local files are ${status.installedVersion || "unknown"}.`,
+    "Update Local Files",
+    "Show Status",
+    "Later"
+  );
+
+  if (choice === "Update Local Files") {
+    await vscode.commands.executeCommand("copilotGoalSystem.install");
+  } else if (choice === "Show Status") {
+    await context.globalState.update(promptKey, true);
+    await showInstallStatus(output, statusBar);
+  } else {
+    await context.globalState.update(promptKey, true);
+  }
+}
+
 async function updateStatusBar(statusBar, output, knownStatus) {
   if (!statusBar) return;
   if (!config().get("showStatusBar", true)) {
@@ -339,10 +425,13 @@ async function updateStatusBar(statusBar, output, knownStatus) {
     const status = knownStatus || await collectStatus();
     const installed = statusIsInstalled(status);
     const missing = missingChecks(status);
+    const updateNeeded = status.runtimeState.status === "stale";
     statusBar.command = "copilotGoalSystem.status";
-    statusBar.text = installed ? "$(target) Goal" : "$(warning) Goal Setup";
+    statusBar.text = installed ? "$(target) Goal" : updateNeeded ? "$(sync) Goal Update" : "$(warning) Goal Setup";
     statusBar.tooltip = installed
       ? `${DISPLAY_NAME} is installed for ${status.paths.home}. Click to show status.`
+      : updateNeeded
+        ? `${DISPLAY_NAME} local files are ${status.installedVersion || "unknown"}; extension bundle is ${status.bundledVersion}. Click to update.`
       : `${DISPLAY_NAME} needs setup for ${status.paths.home}. Missing: ${missing.join(", ") || "unknown"}. Click to show status.`;
     statusBar.show();
   } catch (error) {

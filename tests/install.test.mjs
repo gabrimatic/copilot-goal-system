@@ -9,6 +9,7 @@ import test from "node:test";
 const execFileAsync = promisify(execFile);
 const root = path.resolve(".");
 const installer = path.join(root, "scripts", "install.mjs");
+const rootPackage = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
 
 test("installer merges hooks, writes backups, and preserves existing settings", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-test-"));
@@ -59,8 +60,14 @@ test("installer merges hooks, writes backups, and preserves existing settings", 
   const snippet = await readFile(path.join(copilotDir, "copilot-instructions.md"), "utf8");
   assert.match(snippet, /copilot-goal-system snippet start/);
 
+  const installedPackage = JSON.parse(await readFile(path.join(copilotDir, "extensions", "goal-system", "package.json"), "utf8"));
+  assert.equal(installedPackage.version, rootPackage.version);
+
   await assert.rejects(readFile(path.join(copilotDir, "extensions", "goal-system", "vscode-extension", "package.json"), "utf8"), /ENOENT/);
-  await assert.rejects(readFile(path.join(copilotDir, "extensions", "goal-system", "dist", "copilot-goal-system-1.1.0.vsix"), "utf8"), /ENOENT/);
+  await assert.rejects(
+    readFile(path.join(copilotDir, "extensions", "goal-system", "dist", `copilot-goal-system-${rootPackage.version}.vsix`), "utf8"),
+    /ENOENT/
+  );
 
   const findResult = await execFileAsync("find", [copilotDir, "-name", "*.backup-*"], { encoding: "utf8" });
   assert.match(findResult.stdout, /settings\.json\.backup-/);

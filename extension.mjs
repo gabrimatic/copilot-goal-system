@@ -4,6 +4,7 @@ import {
   CONTINUE_REGEX,
   REPLACE_REGEX,
   GOAL_STATUSES,
+  ISSUE_RESOLUTION_STATUSES,
   MUTABLE_GOAL_STATUSES,
   GoalStore,
   appendPromptNote,
@@ -174,6 +175,32 @@ const goalToolProperties = {
   inspectionEvidence: { type: "array", items: { type: "string" } },
   discoveredIssues: { type: "array", items: { type: "string" } },
   resolvedIssues: { type: "array", items: { type: "string" } },
+  issueResolutions: {
+    type: "array",
+    description:
+      "Evidence-backed coverage for discovered issues whose resolution wording differs from the original issue text. Use covers plus evidence instead of forcing literal resolvedIssues strings.",
+    items: {
+      type: "object",
+      properties: {
+        covers: {
+          type: "array",
+          items: { type: "string" },
+          description: "Specific discovered issue references, IDs, or exact/substantial issue text. Wildcards are refused.",
+        },
+        issue: { type: "string", description: "Optional single discovered issue reference." },
+        originalIssue: { type: "string", description: "Optional original discovered issue text." },
+        target: { type: "string", description: "Optional target or broader issue. Does not count as original coverage by itself." },
+        targetIssue: { type: "string", description: "Optional target or broader issue. Does not count as original coverage by itself." },
+        status: { type: "string", enum: ISSUE_RESOLUTION_STATUSES },
+        resolution: { type: "string", description: "Concrete fix, merge, duplicate, or rename explanation." },
+        evidence: {
+          type: "array",
+          items: { type: "string" },
+          description: "Concrete proof for this issue resolution, such as tests, inspected files, or runtime checks.",
+        },
+      },
+    },
+  },
   doneSoFar: { type: "array", items: { type: "string" } },
   remaining: { type: "array", items: { type: "string" } },
   blockers: { type: "array", items: { type: "string" } },

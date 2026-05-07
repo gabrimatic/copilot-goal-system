@@ -2,7 +2,7 @@
   "name": "copilot-goal-system",
   "displayName": "Copilot Goal System",
   "description": "One-command installer for persisted goal mode in GitHub Copilot CLI and VS Code Copilot Chat.",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "publisher": "gabrimatic",
   "author": {
     "name": "Soroush Yousefpour",
@@ -25,6 +25,7 @@
   "homepage": "https://github.com/gabrimatic/copilot-goal-system#readme",
   "files": [
     "extension.cjs",
+    "lib/**",
     "README.md",
     "CHANGELOG.md",
     "SUPPORT.md",
@@ -147,6 +148,11 @@
           "default": true,
           "description": "Show one first-run setup prompt when the goal system is not installed into the local Copilot CLI profile."
         },
+        "copilotGoalSystem.promptOnUpdate": {
+          "type": "boolean",
+          "default": true,
+          "description": "Prompt after extension updates when the installed local Copilot runtime files are older than the bundled files."
+        },
         "copilotGoalSystem.showStatusBar": {
           "type": "boolean",
           "default": true,
@@ -211,7 +217,7 @@
   "scripts": {
     "vscode:prepublish": "node scripts/prepare-bundle.mjs",
     "prepare:bundle": "node scripts/prepare-bundle.mjs",
-    "check": "node --check extension.cjs && node --check scripts/prepare-bundle.mjs && node --check scripts/package.mjs",
+    "check": "node --check extension.cjs && node --check lib/runtime-version.cjs && node --check scripts/prepare-bundle.mjs && node --check scripts/package.mjs",
     "package": "node scripts/package.mjs",
     "publish": "vsce publish"
   },

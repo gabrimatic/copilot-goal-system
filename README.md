@@ -36,6 +36,8 @@ The Marketplace **Install** button installs the VS Code wrapper. The command abo
 - lifecycle hooks
 - the Goal System custom agent
 
+After extension updates, VS Code checks whether `~/.copilot/extensions/goal-system/` is older than the bundled runtime. If it is stale, the status bar switches to `Goal Update` and VS Code prompts you to update the local Copilot files.
+
 ### Terminal
 
 Clone with SSH:
@@ -78,7 +80,7 @@ Make this project pass its test suite. Inspect first, fix every in-scope issue, 
 |---------|---------|
 | `goal_system_open` | Create or replace the persisted Active Goal. |
 | `goal_system_status` | Reload authoritative goal state after resume, compaction, or uncertainty. |
-| `goal_system_update` | Record inspected facts, discovered issues, resolved work, verification, blockers, and remaining work. |
+| `goal_system_update` | Record inspected facts, discovered issues, issue resolutions, resolved work, verification, blockers, and remaining work. |
 | `goal_system_close` | Close as complete, blocked, or cancelled. Completion is refused without proof. |
 | Copilot hooks | Restore goal context, create compact snapshots, block premature stop, and isolate subagents. |
 | VS Code Chat hooks | Inject session context, create compact snapshots, block premature stop, deny drift, and isolate subagents in Copilot Chat. |
@@ -92,7 +94,8 @@ Default behavior is strict:
 - Goal state is **main-session only**. Subagents cannot open, update, read, or close goals.
 - Same-directory sessions are **isolated**. Automatic continuation happens only when exactly one open same-directory goal exists.
 - The remaining queue is **dynamic**. Newly discovered in-scope issues are added to the goal and must be resolved before completion.
-- Completion requires **inspection evidence, validation proof, verification results, requirement coverage, no remaining work, no blockers, resolved discovered issues, and a completion audit**.
+- Discovered issues can be **renamed, merged, deduplicated, superseded, or resolved under clearer wording** only with evidence-backed `issueResolutions`.
+- Completion requires **inspection evidence, validation proof, verification results, requirement coverage, no remaining work, no blockers, resolved or evidence-covered discovered issues, and a completion audit**.
 - Tool drift is controlled. After three non-goal tool calls without `goal_system_update`, Copilot gets a warning. After five, non-goal tools are denied until the goal is updated.
 - Stop hooks are blocked while an open goal remains active.
 
@@ -133,6 +136,8 @@ The root package is the single editable source for the goal-system runtime, hook
 The VS Code extension generates `vscode-extension/resources/goal-system/` during packaging. That directory is a build artifact and is ignored by Git, so there is no second runtime source to keep in sync.
 
 Marketplace releases are packaged snapshots. A GitHub commit does not update installed Marketplace copies by itself; a new extension version must be published. This repository includes `.github/workflows/publish-vscode.yml` so tagged or manually dispatched releases can package and publish the VSIX from GitHub when the `VSCE_PAT` secret is configured.
+
+Updating the VS Code extension is not enough by itself because Copilot reads files from `~/.copilot/`. The extension compares its bundled version with the installed local runtime and prompts you to run the installer when local files are stale.
 
 ## How it works
 

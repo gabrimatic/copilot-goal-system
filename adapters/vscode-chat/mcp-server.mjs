@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import {
   GOAL_STATUSES,
+  ISSUE_RESOLUTION_STATUSES,
   MUTABLE_GOAL_STATUSES,
   GoalStore,
   createGoalRecord,
@@ -26,6 +27,18 @@ const store = new GoalStore();
 await store.init();
 
 const textArray = z.array(z.string()).optional();
+const issueResolutionSchema = z
+  .object({
+    covers: z.array(z.string()).optional(),
+    issue: z.string().optional(),
+    originalIssue: z.string().optional(),
+    target: z.string().optional(),
+    targetIssue: z.string().optional(),
+    status: z.enum(ISSUE_RESOLUTION_STATUSES).optional(),
+    resolution: z.string().optional(),
+    evidence: z.array(z.string()).optional(),
+  })
+  .describe("Evidence-backed resolution coverage for discovered issues without requiring literal resolvedIssues strings.");
 const goalPatchShape = {
   objective: z.string().optional(),
   requirements: textArray,
@@ -40,6 +53,7 @@ const goalPatchShape = {
   inspectionEvidence: textArray,
   discoveredIssues: textArray,
   resolvedIssues: textArray,
+  issueResolutions: z.array(issueResolutionSchema).optional(),
   doneSoFar: textArray,
   remaining: textArray,
   blockers: textArray,
