@@ -21,6 +21,8 @@ permissions:
 jobs:
   package-and-publish:
     runs-on: ubuntu-latest
+    env:
+      VSCE_PAT_CONFIGURED: ${{ secrets.VSCE_PAT != '' }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -35,9 +37,12 @@ jobs:
       - run: npm --prefix vscode-extension ci
       - run: npm run vscode:package
       - name: Publish Marketplace extension
-        if: ${{ github.event_name == 'push' || inputs.publish == 'true' }}
+        if: ${{ (github.event_name == 'push' || inputs.publish == 'true') && env.VSCE_PAT_CONFIGURED == 'true' }}
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: |
           version="$(node -p "require('./vscode-extension/package.json').version")"
           npm --prefix vscode-extension exec vsce -- publish --packagePath "dist/copilot-goal-system-${version}.vsix"
+      - name: Skip Marketplace publish
+        if: ${{ (github.event_name == 'push' || inputs.publish == 'true') && env.VSCE_PAT_CONFIGURED != 'true' }}
+        run: echo "VSCE_PAT is not configured. Packaged the extension without publishing."
