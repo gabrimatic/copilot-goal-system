@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.3
+
+- Publishes from GitHub Actions automatically when a `v*` tag is pushed.
+- Fails clearly when the Marketplace token secret is missing.
+- Documents the `VSCE_PAT` setup and tag-based publish flow.
+
 ## 1.1.2
 
 - Treats an empty VS Code `mcp.json` file as an empty MCP config when installing or updating local files.

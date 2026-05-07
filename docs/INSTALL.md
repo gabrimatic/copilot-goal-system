@@ -143,6 +143,25 @@ For both adapters:
 
 Restart Copilot CLI after updating.
 
+## Automated Marketplace Publish
+
+Marketplace publish is automated from GitHub Actions when a `v*` tag is pushed. The workflow requires a repository secret named `VSCE_PAT`.
+
+Create the token in Azure DevOps with Marketplace publish permission, then store it:
+
+```bash
+gh secret set VSCE_PAT --repo gabrimatic/copilot-goal-system
+```
+
+After the secret exists, pushing a release tag packages from the repository source, runs verification, and publishes the VS Code extension:
+
+```bash
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+For a package-only dry run, run the `Publish VS Code Extension` workflow manually with `publish=false`.
+
 ## Uninstall
 
 Remove the installed files:

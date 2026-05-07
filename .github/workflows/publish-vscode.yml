@@ -21,8 +21,6 @@ permissions:
 jobs:
   package-and-publish:
     runs-on: ubuntu-latest
-    env:
-      VSCE_PAT_CONFIGURED: ${{ secrets.VSCE_PAT != '' }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -36,13 +34,22 @@ jobs:
       - run: npm run verify
       - run: npm --prefix vscode-extension ci
       - run: npm run vscode:package
+      - name: Require Marketplace token
+        if: ${{ github.event_name == 'push' || inputs.publish == 'true' }}
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [ -z "$VSCE_PAT" ]; then
+            echo "VSCE_PAT is required for Marketplace publishing. Add it as a repository Actions secret."
+            exit 1
+          fi
       - name: Publish Marketplace extension
-        if: ${{ (github.event_name == 'push' || inputs.publish == 'true') && env.VSCE_PAT_CONFIGURED == 'true' }}
+        if: ${{ github.event_name == 'push' || inputs.publish == 'true' }}
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: |
           version="$(node -p "require('./vscode-extension/package.json').version")"
           npm --prefix vscode-extension exec vsce -- publish --packagePath "dist/copilot-goal-system-${version}.vsix"
-      - name: Skip Marketplace publish
-        if: ${{ (github.event_name == 'push' || inputs.publish == 'true') && env.VSCE_PAT_CONFIGURED != 'true' }}
-        run: echo "VSCE_PAT is not configured. Packaged the extension without publishing."
+      - name: Package-only dry run
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == 'false' }}
+        run: echo "Packaged extension without publishing because publish=false."

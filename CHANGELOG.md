@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.3
+
+- Publishes the VS Code extension automatically from GitHub Actions when a `v*` tag is pushed.
+- Fails the publish workflow clearly when the Marketplace token is missing instead of silently packaging without publishing.
+- Documents the `VSCE_PAT` setup and tag-based publish flow.
+
 ## 1.1.2
 
 - Treats empty Copilot `settings.json` and VS Code `mcp.json` files as empty objects during install or update.
