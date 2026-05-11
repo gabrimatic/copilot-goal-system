@@ -1,8 +1,8 @@
 # Requirements
 
-Copilot Goal System keeps a long-running agent locked onto a real destination.
+Copilot Goal System keeps long-running Copilot work locked onto a real destination.
 
-It is successful only when it prevents drift, survives compaction, keeps subagents out of goal ownership, records durable evidence, and refuses fake completion.
+The system is doing its job only when it prevents drift, survives compaction, keeps subagents out of goal ownership, records durable evidence, and refuses fake completion.
 
 ## Required properties
 
@@ -10,7 +10,7 @@ It is successful only when it prevents drift, survives compaction, keeps subagen
 - Main-session ownership: subagents cannot open, read, update, or close goals.
 - Durable state: active goals are persisted by session, working directory, and compact snapshot.
 - Isolation: same-directory goals in different sessions must not silently merge.
-- Continuation: a single unambiguous same-directory open goal can be loaded only when the user asks to continue.
+- Continuation: a single unambiguous same-directory open goal can be loaded only on explicit continuation.
 - Drift control: the main session must update state after meaningful work and is blocked after too much stale progress.
 - Stop control: an open goal blocks agent stop and returns a hard continuation directive until the goal is continued or closed with evidence.
 - Completion control: complete goals require inspection evidence, validation proof, verification results, requirement coverage, no remaining work, no blockers, resolved or evidence-covered discovered issues, and a completion audit.
@@ -41,7 +41,7 @@ Mutable queues replace by explicit update:
 - remaining
 - blockers
 
-This split prevents partial updates from erasing proof while still allowing the model to intentionally clear outstanding work.
+This split prevents partial updates from erasing proof while still letting the main session intentionally clear outstanding work.
 
 `issueResolutions` is for issue evolution, not shortcut completion. Entries must name the original discovered issue, use one of `resolved`, `merged`, `renamed`, `duplicate`, or `superseded`, and include evidence for why the original issue no longer remains open.
 

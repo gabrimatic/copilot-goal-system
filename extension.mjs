@@ -156,14 +156,14 @@ function appendActivationInstructions(prompt) {
     [
       "A persisted draft goal was created for this main session only.",
       "Do not answer with only 'goal-system loaded'. Inspect the real environment first, then call goal_system_update with verified facts before doing substantive work.",
-      "This is execution mode when the user asked for execution: inspect, fix, verify, and prove. Do not keep the goal only in conversation memory.",
+      "This is execution mode when the prompt asks for execution: inspect, fix, verify, and prove. Do not keep the goal only in conversation memory.",
     ].join("\n")
   );
 }
 
 const goalToolProperties = {
   objective: { type: "string", description: "The verified goal objective." },
-  requirements: { type: "array", items: { type: "string" }, description: "Explicit requirements extracted from the user ask." },
+  requirements: { type: "array", items: { type: "string" }, description: "Explicit requirements extracted from the prompt." },
   scope: { type: "array", items: { type: "string" } },
   mustNotRegress: { type: "array", items: { type: "string" } },
   constraints: { type: "array", items: { type: "string" } },
@@ -248,7 +248,7 @@ const session = await joinSession({
           {
             objective: trimmedPromptObjective(prompt),
             requirements: ["Inspect the real environment before treating any unverified detail as fact."],
-            doneSoFar: ["Draft goal record created from the user's explicit goal-mode prompt."],
+            doneSoFar: ["Draft goal record created from the explicit goal-mode prompt."],
             remaining: [
               "Inspect the real environment and replace draft fields with verified facts.",
               "Execute the goal, record discovered issues, fix them, verify with evidence, and close only after audit.",
@@ -278,7 +278,7 @@ const session = await joinSession({
               prompt,
               [
                 "An active persisted goal already exists for this main session.",
-                "Decide whether the user is replacing, correcting, or modifying it before overwriting. Use goal_system_status if the full snapshot is needed.",
+                "Decide whether the prompt is replacing, correcting, or modifying it before overwriting. Use goal_system_status if the full snapshot is needed.",
                 "If replacement is clearly intended, call goal_system_open with replaceExisting: true and preserve no invented facts.",
               ].join("\n")
             ),
@@ -315,7 +315,7 @@ const session = await joinSession({
           return {
             modifiedPrompt: appendPromptNote(
               prompt,
-              "Multiple active goals exist for this working directory across sessions. Do not guess which one to continue. Ask the user to resume the intended session or clarify the goal ID."
+              "Multiple active goals exist for this working directory across sessions. Do not guess which one to continue. Ask for the intended session or goal ID."
             ),
           };
         }
@@ -452,7 +452,7 @@ const session = await joinSession({
           store.auditLog("open_blocked", { sid: safeSessionId(invocation.sessionId), reason: "existing_active" });
           return {
             textResultForLlm:
-              "An active persisted goal already exists for this main session/workspace. Use goal_system_update to continue it, or call goal_system_open with replaceExisting: true only when the user clearly intends to replace the current goal.",
+              "An active persisted goal already exists for this main session/workspace. Use goal_system_update to continue it, or call goal_system_open with replaceExisting: true only when the prompt clearly replaces the current goal.",
             resultType: "failure",
           };
         }
@@ -495,7 +495,7 @@ const session = await joinSession({
         if (!isOpenGoal(loadedGoal.goal)) {
           return {
             textResultForLlm:
-              "The persisted goal is already closed. Start a new goal with goal_system_open when the user explicitly asks for a replacement or new goal.",
+              "The persisted goal is already closed. Start a new goal with goal_system_open when the prompt explicitly asks for a replacement or new goal.",
             resultType: "failure",
           };
         }

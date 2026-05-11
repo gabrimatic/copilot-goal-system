@@ -1,8 +1,8 @@
 # Copilot Goal System
 
-Copilot Goal System is a VS Code installer for persisted goal mode in GitHub Copilot CLI and VS Code Copilot Chat.
+Copilot Goal System installs persisted goal mode for GitHub Copilot CLI and VS Code Copilot Chat.
 
-Use it when long-running Copilot sessions need to keep an active goal alive across compaction, tool drift, subagents, multiple sessions, and tasks that grow during inspection.
+Use it when long-running Copilot work needs to keep one active goal alive across compaction, tool drift, subagents, multiple sessions, and tasks that grow during inspection.
 
 ## Install
 
@@ -19,28 +19,21 @@ The Marketplace **Install** button installs the VS Code extension. The command i
 - `~/.copilot/hooks/goal-system-vscode.json`
 - `~/.copilot/agents/goal-system.agent.md`
 - hook entries in `~/.copilot/settings.json`
-- a `goalSystem` MCP server in the VS Code user `mcp.json`
+- a `goalSystem` MCP server in the VS Code profile `mcp.json`
 - a short reminder in `~/.copilot/copilot-instructions.md`
 
-The installer preserves existing Copilot and VS Code MCP settings and writes backups before changing files. On first startup, VS Code offers a one-time setup prompt and a compact status bar item so you do not need to discover the command manually.
+The installer preserves existing Copilot and VS Code MCP settings and writes backups before changing files. On first startup, VS Code offers a one-time setup prompt and a compact status bar item.
 
 After extension updates, VS Code compares the extension bundle with the installed files in `~/.copilot/extensions/goal-system/`. If the local runtime is stale, the status bar changes to `Goal Update` and VS Code prompts you to update the local Copilot files. Updates replace the installed runtime snapshot so stale files from older releases do not remain active.
 
 ## Features
 
-- Persists one active goal for the main Copilot session.
-- Creates a persisted draft goal immediately when VS Code Chat receives an explicit `/goal` prompt.
-- Restores compact goal context after resume, compaction, and session restarts.
-- Isolates same-directory sessions so parallel work does not share goal state by accident.
-- Loads one unambiguous same-directory goal on explicit continuation instead of relying on chat memory.
-- Keeps subagents outside goal ownership; only the main session can open, read, update, or close goals.
-- Tracks newly discovered in-scope issues as the task grows.
-- Tracks renamed, merged, duplicate, superseded, and clearer-worded issues through evidence-backed issue resolutions.
-- Warns on goal drift and blocks non-goal tool calls when the goal has gone stale.
-- Refuses completion without inspection evidence, verification results, requirement coverage, resolved or evidence-covered discovered issues, no remaining work, no blockers, and a completion audit.
-- Installs and updates from VS Code without cloning the repository.
-- Shows a compact status bar item for installed, update-needed, setup-needed, installing, and error states.
-- Adds a VS Code Chat custom agent, hook config, and local MCP goal tools.
+| Area | What it does |
+|------|--------------|
+| Goal state | Persists one active goal for the main Copilot session, restores compact context after resume or compaction, and loads one unambiguous same-directory goal on explicit continuation. |
+| Session boundaries | Keeps parallel same-directory sessions isolated and keeps subagents outside goal ownership. |
+| Completion gates | Tracks newly discovered and renamed issues, warns on stale goal state, blocks drift, and refuses completion without inspection evidence, verification results, requirement coverage, no remaining work, no blockers, and a completion audit. |
+| VS Code setup | Installs and updates from VS Code, adds the `Goal System` custom agent, configures hooks and MCP tools, and shows setup or update state in the status bar. |
 
 ## Commands
 
@@ -80,7 +73,7 @@ Make this project pass its test suite. Inspect first, fix every in-scope issue, 
 - VS Code Copilot Chat with hooks and MCP enabled for VS Code Chat mode
 - A bash-compatible shell for the CLI hook helper
 
-The installer uses the current OS user's home directory by default. Set `copilotGoalSystem.homeOverride` when you need to install into a different local profile. Set `copilotGoalSystem.vscodeMcpConfigPathOverride` only when your VS Code MCP user config lives outside the detected profile path.
+The installer uses your current OS account's home directory by default. Set `copilotGoalSystem.homeOverride` when you need to install into a different local profile. Set `copilotGoalSystem.vscodeMcpConfigPathOverride` only when your VS Code MCP config lives outside the detected profile path.
 
 ## Settings
 
@@ -91,11 +84,11 @@ The installer uses the current OS user's home directory by default. Set `copilot
 | `copilotGoalSystem.promptOnFirstRun` | `true` | Show the one-time setup prompt when setup is missing. |
 | `copilotGoalSystem.promptOnUpdate` | `true` | Prompt when extension updates leave local Copilot runtime files stale. |
 | `copilotGoalSystem.showStatusBar` | `true` | Show the compact setup/status item in the VS Code status bar. |
-| `copilotGoalSystem.vscodeMcpConfigPathOverride` | empty | Use a custom VS Code MCP user config path. |
+| `copilotGoalSystem.vscodeMcpConfigPathOverride` | empty | Use a custom VS Code MCP config path. |
 
 ## Behavior
 
-- Goal mode is manual and user-triggered.
+- Goal mode is manual and explicitly triggered.
 - Goal state belongs to the main session only.
 - Subagents cannot open, read, update, or close goals.
 - Same-directory sessions stay isolated.

@@ -2,7 +2,7 @@
 
 This release is Copilot-first.
 
-The core idea is portable: keep a persisted Active Goal outside chat memory, inject compact reminders at lifecycle boundaries, deny drift, isolate subagents, and refuse completion without proof.
+The portable part is the pattern: keep a persisted Active Goal outside chat memory, inject compact reminders at lifecycle boundaries, deny drift, isolate subagents, and refuse completion without proof.
 
 The implementation is not automatically portable because every host exposes different hooks, tools, settings, and subagent metadata.
 
@@ -28,7 +28,7 @@ Copilot provides the surfaces this implementation uses:
 
 - skills
 - SDK extension tools
-- user prompt/session hooks
+- prompt/session hooks
 - pre-tool and post-tool hooks
 - stop hooks
 - subagent hooks
@@ -47,11 +47,11 @@ VS Code provides the surfaces this implementation uses:
 - `PreCompact` hook
 - `Stop` hook
 - `SubagentStart` and `SubagentStop` hooks
-- user-level hook and MCP configuration
+- profile-level hook and MCP configuration
 
 The adapter is preview because VS Code hooks and agent plugins are Preview surfaces and can be disabled by organization policy.
 
-`UserPromptSubmit` is part of the enforcement path, not just a reminder: it persists draft goals on explicit activation and handles same-directory continuation before the session can drift into an untracked conversation.
+`UserPromptSubmit` is part of the enforcement path. It persists draft goals on explicit activation and handles same-directory continuation before the session can drift into an untracked conversation.
 
 ## Model-runtime wrappers
 

@@ -104,7 +104,7 @@ function emptySessionContextNote(sessionId, cwd) {
     "Goal System for VS Code Chat is available for this main session.",
     `sessionId: ${sessionId}`,
     `cwd: ${cwd}`,
-    "When the user explicitly starts goal mode, call goal_system_open with these exact values. For active goals, use goal_system_status before continuing or closing. Subagents must not use goal tools.",
+    "When the prompt explicitly starts goal mode, call goal_system_open with these exact values. For active goals, use goal_system_status before continuing or closing. Subagents must not use goal tools.",
   ].join("\n");
 }
 
@@ -114,7 +114,7 @@ function draftActivationMessage(goal) {
     `Goal ID: ${goal.id || "unknown"}`,
     `Objective: ${goal.objective || "unknown until inspected"}`,
     "Inspect the real environment before treating any detail as fact, then call goal_system_update with verified facts before doing substantive work.",
-    "Do not answer with only an acknowledgment. Continue the real user task and close only after proof.",
+    "Do not answer with only an acknowledgment. Continue the real task and close only after proof.",
   ].join("\n");
 }
 
@@ -151,7 +151,7 @@ async function main() {
           {
             objective: trimmedPromptObjective(prompt),
             requirements: ["Inspect the real environment before treating any unverified detail as fact."],
-            doneSoFar: ["Draft goal record created from the user's explicit goal-mode prompt."],
+            doneSoFar: ["Draft goal record created from the explicit goal-mode prompt."],
             remaining: [
               "Inspect the real environment and replace draft fields with verified facts.",
               "Execute the goal, record discovered issues, fix them, verify with evidence, and close only after audit.",
@@ -187,7 +187,7 @@ async function main() {
         emit({
           continue: true,
           systemMessage:
-            "Multiple active goals exist for this working directory across sessions. Do not guess which one to continue. Ask the user to resume the intended session or clarify the goal ID.",
+            "Multiple active goals exist for this working directory across sessions. Do not guess which one to continue. Ask for the intended session or goal ID.",
         });
         return;
       }

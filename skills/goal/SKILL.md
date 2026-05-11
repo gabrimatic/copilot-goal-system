@@ -1,11 +1,11 @@
 ---
 name: goal
 description: |
-  Main-session goal-mode execution for Copilot. Use when the user explicitly
+  Main-session goal-mode execution for Copilot. Use when the prompt explicitly
   asks for /goal, new goal, goal mode, continue an active goal, keep working
   until done, fix everything, no escape, or verify and prove it. Converts the
-  ask into a persisted Active Goal, inspects first, executes real fixes, records
-  proof, prevents drift/fake completion, and closes only after strict audit.
+  ask into a persisted Active Goal, inspects first, makes real fixes, records
+  proof, prevents drift and fake completion, and closes only after strict audit.
 allowed-tools: "*"
 user-invocable: true
 disable-model-invocation: false
@@ -13,23 +13,23 @@ disable-model-invocation: false
 
 # Goal Mode
 
-Goal mode turns a high-level user objective into a strict execution contract and keeps the main session locked onto it until the real outcome is complete, blocked by evidence, cancelled by the user, or replaced by the user.
+Goal mode turns a high-level objective into a strict execution contract and keeps the main session locked onto it until the real outcome is complete, blocked by evidence, cancelled, or explicitly replaced.
 
 This skill is for Copilot environments that do not have native persisted `/goal` semantics. It uses Copilot-native customization surfaces: skills for behavior, SDK extension tools for persisted state, hooks for compact continuity and boundaries, resumable sessions for long work, and normal project/test tooling for proof.
 
 ## Final purpose
 
-The goal system works only when it keeps the agent locked to the real destination, prevents drift and fake completion, forces real inspection instead of guessing, fixes every discovered in-scope issue instead of merely listing or deferring it, protects existing behavior from regression, verifies the result with real evidence, and only declares completion when the original objective plus every explicit requirement is truly satisfied.
+The goal system works only when it keeps the session locked to the real destination, prevents drift and fake completion, forces real inspection instead of guessing, fixes every discovered in-scope issue, protects existing behavior from regression, verifies the result with real evidence, and declares completion only when the original objective plus every explicit requirement is satisfied.
 
 ## Non-negotiable behavior
 
 This is execution mode, not review mode.
 
-Do not stop at advice, plans, or a list of findings when the user asked for work to be done. Inspect the real state, fix the real issues, verify the result, and prove it.
+Do not stop at advice, plans, or a list of findings when the prompt asks for work to be done. Inspect the real state, fix the real issues, verify the result, and prove it.
 
 Never invent facts. Do not fabricate stack, files, commands, routes, APIs, screens, metrics, titles, dates, product behavior, test results, browser results, runtime behavior, blockers, or completion evidence.
 
-If something is unknown, mark it as `unknown until inspected` or `needs confirmation`. Ask the user only when the missing information is required and cannot be discovered from the available environment, repo, runtime, browser, public source, or provided material.
+If something is unknown, mark it as `unknown until inspected` or `needs confirmation`. Ask only when the missing information is required and cannot be discovered from the available environment, repo, runtime, browser, public source, or provided material.
 
 No soft escape. Every discovered in-scope issue must be fixed in the same goal, whether small or large. Do not move fixable in-scope work to a follow-up just because it became harder than expected.
 
@@ -39,7 +39,7 @@ The issue list is dynamic. If inspection starts with three known issues and late
 
 ## Main-session-only rule
 
-Goals are owned by the user's interactive main session.
+Goals belong to the interactive main session.
 
 Subagents must not open, update, read, or close goal state. Subagents may be used only for bounded research, inspection, or test execution. They return evidence to the main session, and the main session verifies it before relying on it.
 
@@ -49,7 +49,7 @@ Multiple sessions may run at the same time. Each main session owns only its own 
 
 ## Manual activation only
 
-Activate goal mode only when the user explicitly says or clearly implies one of these:
+Activate goal mode only when the prompt explicitly says or clearly implies one of these:
 
 - `/goal`
 - `new goal`
@@ -69,11 +69,11 @@ Do not silently convert normal requests into goals.
 
 Classify the request as one of three modes:
 
-1. Rewrite only: the user wants a goal prompt. Write the prompt and stop.
-2. Start execution: the user wants the goal executed. Open/persist the goal and begin work.
+1. Rewrite only: the request asks for a goal prompt. Write the prompt and stop.
+2. Start execution: the request asks for the goal to be executed. Open/persist the goal and begin work.
 3. Continue execution: reload the active goal state and continue from evidence, not memory.
 
-If it is unclear whether a new prompt replaces, modifies, or continues an existing goal, ask one short clarification unless the user intent is obvious.
+If it is unclear whether a new prompt replaces, modifies, or continues an existing goal, ask one short clarification unless the intent is obvious.
 
 ## Required Active Goal fields
 
@@ -103,7 +103,7 @@ If `goal_system_status`, `goal_system_open`, `goal_system_update`, and `goal_sys
 
 Use the state tools as a strict state machine:
 
-- `goal_system_open`: create or replace a goal only when the user clearly starts or replaces a goal.
+- `goal_system_open`: create or replace a goal only when the prompt clearly starts or replaces a goal.
 - `goal_system_update`: record verified facts, requirements, inspection evidence, discovered issues, issue resolutions, fixes, validation, remaining work, and blockers. Do not use empty updates, vague progress notes, or history-only updates.
 - `goal_system_status`: reload authoritative state before continuation or completion claims.
 - `goal_system_close`: close only after real evidence proves completion, blockage, or cancellation.
@@ -122,7 +122,7 @@ When a goal is active, call `goal_system_update` after every meaningful step:
 
 Never let more than 5 tool calls pass without calling `goal_system_update`. The extension tracks drift, warns after 3 non-goal tool calls, and blocks the next non-goal tool after 5 until `goal_system_update` records real state. If you see a drift warning, your immediate next action must be `goal_system_update` unless you first need `goal_system_status` to reload authoritative state.
 
-This is not optional. The user paid for a goal system that tracks progress rigorously. Drifting without updates defeats the entire purpose.
+This is the point of the system. Drifting without updates breaks the contract.
 
 If `goal_system_update` fails, do not continue as if state was saved. Read the error, call `goal_system_status` if useful, then retry with concrete state fields. If the state tools are unavailable, say that goal persistence is unavailable and keep a concise manual checkpoint in the final response.
 
@@ -159,7 +159,7 @@ Do not guess commands. Derive them from manifests, CI, docs, or existing scripts
 A strong goal must include:
 
 1. Destination: the final user-visible or product-visible outcome.
-2. Requirements: every explicit requirement from the user's ask.
+2. Requirements: every explicit requirement from the prompt.
 3. Scope: exact surfaces to inspect and fix, or `unknown until inspected` if not known yet.
 4. Must-not-regress: what cannot break, weaken, hide, remove, bypass, or silently change.
 5. Constraints: architecture, platform, tooling, privacy, security, style, approval, and product rules.
@@ -167,7 +167,7 @@ A strong goal must include:
 7. Validation/proof: concrete checks that match the actual environment.
 8. Stop condition: complete only when every in-scope issue is fixed and verified.
 
-When the user asks for a goal prompt only, produce this shape with unknowns clearly marked. Do not invent stack or files.
+When the request asks for a goal prompt only, produce this shape with unknowns clearly marked. Do not invent stack or files.
 
 ## Working loop
 
@@ -215,17 +215,17 @@ Compaction must not hurt continuity. Keep persisted goal state concise but compl
 
 After compaction or resume, reload the goal state before acting.
 
-If an active goal is still open at stop time, the hook must block the turn from ending and issue a hard continuation directive. Treat that directive as the next user instruction: call `goal_system_status`, continue one concrete remaining item, update persisted state with evidence, and close only after completion/blockage/cancellation is proven. Do not answer with a final summary, ask for permission to continue, or bypass the guard by copying unresolved issue text into `resolvedIssues`.
+If an active goal is still open at stop time, the hook must block the turn from ending and issue a hard continuation directive. Treat that directive as the next instruction: call `goal_system_status`, continue one concrete remaining item, update persisted state with evidence, and close only after completion/blockage/cancellation is proven. Do not answer with a final summary, ask for permission to continue, or bypass the guard by copying unresolved issue text into `resolvedIssues`.
 
-If a previous goal was closed as blocked or cancelled, do not resurrect it. A terminal goal has `closedAt`; start a new goal only when the user asks for a new or replacement goal.
+If a previous goal was closed as blocked or cancelled, do not resurrect it. A terminal goal has `closedAt`; start a new goal only when the prompt asks for a new or replacement goal.
 
 ## Multi-session and multi-directory isolation
 
 Treat goals as scoped to the current main session and current working directory.
 
-Do not silently continue another session's goal. If the user explicitly asks to continue and exactly one same-directory open goal is available, it may be loaded. If multiple open goals exist, ask for clarification or the intended session/goal ID.
+Do not silently continue another session's goal. If the prompt explicitly asks to continue and exactly one same-directory open goal is available, it may be loaded. If multiple open goals exist, ask for clarification or the intended session/goal ID.
 
-Never merge goals across directories unless the user explicitly says the work spans those directories.
+Never merge goals across directories unless the prompt explicitly says the work spans those directories.
 
 If three main sessions run in the same directory, each session keeps its own goal. If each main session starts subagents, those subagents still receive only the subagent boundary and must not read or mutate any goal. A same-directory continuation is allowed only when exactly one open goal exists; ambiguity must stop automatic continuation.
 
@@ -306,7 +306,7 @@ Good blockers:
 - exact missing credential or permission
 - exact unavailable hardware or runtime
 - exact external service failure with command or output evidence
-- exact approval-sensitive action that requires the user
+- exact approval-sensitive action that requires human approval
 - exact privacy, safety, legal, or account boundary
 
 ## Approval-sensitive actions
@@ -327,7 +327,7 @@ Prepare the exact change, show it, wait for approval, then apply it.
 
 ## Privacy
 
-Do not expose private data and do not send private personal data to external tools unless the user explicitly asks and it is necessary.
+Do not expose private data and do not send private personal data to external tools unless explicitly requested and necessary.
 
 Private data includes emails, phone numbers, addresses, IDs, case numbers, IBANs, transaction numbers, passport/residence details, credentials, private documents, and account secrets.
 
@@ -383,7 +383,7 @@ Remaining:
 - none / exact blockers only
 ```
 
-Do not expose chain of thought. Do expose enough evidence for the user to trust the result.
+Do not expose chain of thought. Do expose enough evidence to trust the result.
 
 ## Default goal prompt template
 
@@ -399,7 +399,7 @@ Primary context:
 - Do not invent facts. Ask only for missing information that cannot be verified and is required.
 
 Requirements:
-- <explicit user requirements, or unknown until inspected>
+- <explicit prompt requirements, or unknown until inspected>
 
 Scope:
 - <verified surfaces, or unknown until inspected>
@@ -407,7 +407,7 @@ Scope:
 - Small and large issues are both in scope if they affect the requested outcome.
 
 Must not regress:
-- Preserve existing behavior, product identity, public APIs, routes, data formats, copy meaning, platform support, security, privacy, tests, build checks, and user-visible functionality.
+- Preserve existing behavior, product identity, public APIs, routes, data formats, copy meaning, platform support, security, privacy, tests, build checks, and visible functionality.
 - Do not remove, hide, fake, bypass, weaken, or skip things to appear complete.
 
 Hard constraints:

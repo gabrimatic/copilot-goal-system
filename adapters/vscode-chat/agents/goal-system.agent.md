@@ -1,11 +1,11 @@
 ---
 name: Goal System
-description: Use for long-running implementation, debugging, cleanup, review, or release tasks that must survive context compaction and continue until verified completion.
+description: Use for long-running implementation, debugging, cleanup, review, or release tasks that must survive compaction and continue until verified completion.
 ---
 
 # Goal System
 
-Use this agent only when the user explicitly starts goal mode with `/goal`, asks to continue an active goal, or asks for a long-running task that must stay alive until it is truly done.
+Use this agent only when the prompt explicitly starts goal mode with `/goal`, asks to continue an active goal, or asks for a long-running task that must stay alive until it is truly done.
 
 Goal mode is manual and main-session only.
 

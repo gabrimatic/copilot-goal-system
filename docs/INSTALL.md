@@ -1,6 +1,6 @@
 # Install Guide
 
-This guide installs Copilot Goal System into your local GitHub Copilot profiles.
+Install Copilot Goal System into your local GitHub Copilot profiles. The installer preserves existing settings and writes backups before it changes config.
 
 ## Requirements
 
@@ -34,7 +34,7 @@ For both adapters, run:
 Copilot Goal System: Install Recommended Setup
 ```
 
-The VS Code extension uses the current OS user's home directory by default. Set `copilotGoalSystem.homeOverride` when you need to install into a different local profile. Set `copilotGoalSystem.vscodeMcpConfigPathOverride` only if your VS Code MCP user config lives outside the detected profile path.
+The VS Code extension uses your current OS account's home directory by default. Set `copilotGoalSystem.homeOverride` when you need to install into a different local profile. Set `copilotGoalSystem.vscodeMcpConfigPathOverride` only if your VS Code MCP config lives outside the detected profile path.
 
 ### Terminal
 
@@ -82,7 +82,7 @@ Restart Copilot CLI:
 | `~/.copilot/hooks/goal-context.sh` | CLI lifecycle hook helper. |
 | `~/.copilot/hooks/goal-system-vscode.json` | VS Code Chat lifecycle hook config. |
 | `~/.copilot/agents/goal-system.agent.md` | VS Code Chat custom agent. |
-| VS Code user `mcp.json` | `goalSystem` stdio MCP server config. |
+| VS Code profile `mcp.json` | `goalSystem` stdio MCP server config. |
 | `~/.copilot/settings.json` | Hook entries are merged into existing settings. |
 | `~/.copilot/copilot-instructions.md` | A short goal-system reminder is appended once. |
 
@@ -118,7 +118,7 @@ SubagentStop
 Stop
 ```
 
-`UserPromptSubmit` is required for VS Code Chat to persist a draft goal immediately when the user starts `/goal`, inject active-goal context on each prompt, and load one unambiguous same-directory goal when the user asks to continue.
+`UserPromptSubmit` is required for VS Code Chat to persist a draft goal immediately when a prompt starts `/goal`, inject active-goal context on each prompt, and load one unambiguous same-directory goal on explicit continuation.
 
 ## Update
 
@@ -148,9 +148,9 @@ Restart Copilot CLI after updating.
 
 Updates replace the installed runtime snapshot instead of overlaying files, so files removed from newer releases do not remain active in `~/.copilot/extensions/goal-system/`.
 
-## Automated Marketplace Publish
+## Marketplace publish
 
-Marketplace publish is automated from GitHub Actions when a `v*` tag is pushed. The workflow requires a repository secret named `VSCE_PAT`.
+GitHub Actions publishes Marketplace releases when a `v*` tag is pushed. The workflow requires a repository secret named `VSCE_PAT`.
 
 Create the token in Azure DevOps with Marketplace publish permission, then store it:
 
@@ -193,7 +193,7 @@ Also remove the marked snippet in `~/.copilot/copilot-instructions.md`:
 <!-- copilot-goal-system snippet end -->
 ```
 
-Then remove the `goalSystem` entry from the VS Code user `mcp.json`.
+Then remove the `goalSystem` entry from the VS Code profile `mcp.json`.
 
 ## Troubleshooting
 

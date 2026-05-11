@@ -1,6 +1,6 @@
 # Contributing
 
-Bug fixes, hook hardening, installer improvements, better docs, and adapter research are welcome.
+The most useful contributions make goal mode harder to drift, fake, or break. Bug fixes, hook hardening, installer improvements, better docs, and adapter research are welcome.
 
 ## Dev setup
 
@@ -38,7 +38,7 @@ docs/                         # Install, architecture, requirements, portability
 - Do not weaken completion gates to make tests easier.
 - Do not remove drift blocking or stop-time blocking without replacing them with stronger enforcement.
 - Keep persisted state compact and redacted.
-- Preserve existing user settings when updating installer behavior.
+- Preserve existing local settings when updating installer behavior.
 - Update docs when changing install paths, hook events, tool schemas, or completion requirements.
 
 ## Tests

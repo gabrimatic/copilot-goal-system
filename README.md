@@ -6,9 +6,9 @@
 [![Copilot CLI](https://img.shields.io/badge/GitHub_Copilot_CLI-supported-blue)](https://docs.github.com/copilot)
 [![VS Code Chat](https://img.shields.io/badge/VS_Code_Copilot_Chat-preview-orange)](docs/VSCODE_CHAT.md)
 
-Manual goal mode for GitHub Copilot CLI and VS Code Copilot Chat.
+Copilot Goal System keeps long-running Copilot work tied to one persisted Active Goal.
 
-Copilot Goal System gives long-running Copilot sessions a persisted Active Goal, strict progress checkpoints, subagent boundaries, and proof-based completion. It is for people who want an agent to keep working through compaction, tool drift, subagents, multiple parallel sessions, and messy multi-step tasks without silently forgetting what done means.
+It gives GitHub Copilot CLI and VS Code Copilot Chat local goal state, lifecycle hooks, subagent boundaries, drift blocking, and completion gates that require proof before a goal can close. Use it when a task needs to survive compaction, parallel sessions, subagents, and the moment where inspection turns one issue into ten.
 
 [Quick start](#quick-start) · [What it adds](#what-it-adds) · [How it works](#how-it-works) · [Docs](#docs) · [Security](./SECURITY.md)
 
@@ -28,7 +28,7 @@ After VS Code installs the extension, run:
 Copilot Goal System: Install Recommended Setup
 ```
 
-The Marketplace **Install** button installs the VS Code wrapper. The command above installs the local goal system for the current OS user:
+The Marketplace **Install** button installs the VS Code wrapper. The command above installs the local goal system for your current OS account:
 
 - Copilot CLI stable adapter
 - VS Code Copilot Chat preview adapter
@@ -58,7 +58,7 @@ cd copilot-goal-system
 
 `./install.sh` installs the Copilot CLI adapter by default. Use `./install.sh --target all` to install both CLI and VS Code Chat adapters.
 
-For CLI, restart Copilot CLI, then run:
+For CLI mode, restart Copilot CLI, then run:
 
 ```text
 /skills reload
@@ -76,19 +76,14 @@ Make this project pass its test suite. Inspect first, fix every in-scope issue, 
 
 ## What it adds
 
-| Surface | Purpose |
-|---------|---------|
-| `goal_system_open` | Create or replace the persisted Active Goal. |
-| `goal_system_status` | Reload authoritative goal state after resume, compaction, or uncertainty. |
-| `goal_system_update` | Record inspected facts, discovered issues, issue resolutions, resolved work, verification, blockers, and remaining work. |
-| `goal_system_close` | Close as complete, blocked, or cancelled. Completion is refused without proof. |
-| Copilot hooks | Restore goal context, create compact snapshots, block premature stop, and isolate subagents. |
-| VS Code Chat hooks | Inject session context, create compact snapshots, block premature stop, deny drift, and isolate subagents in Copilot Chat. |
-| Local MCP server | Exposes the same goal tools to VS Code Copilot Chat. |
-| Goal skill | Gives Copilot the behavior contract for goal-mode execution. |
-| Goal System custom agent | Gives VS Code Chat a goal-focused agent entrypoint. |
+| Area | What it does |
+|------|--------------|
+| Goal tools | `goal_system_open`, `goal_system_status`, `goal_system_update`, and `goal_system_close` create, reload, update, and close persisted goals. Completion is refused without proof. |
+| Lifecycle hooks | Restore goal context, write compact snapshots, block premature stop, deny stale non-goal tools, and keep subagents outside goal ownership. |
+| VS Code Chat adapter | Adds the `Goal System` custom agent, VS Code hook config, and local `goalSystem` MCP server. |
+| Goal contract | Installs the `goal` skill and instruction snippet so Copilot knows the work is execution, not a loose reminder. |
 
-Default behavior is strict:
+Default behavior:
 
 - Goal mode is **manual**. Normal prompts do not become goals.
 - `/goal` activation is recognized as a real slash command and creates a persisted draft goal before work begins.
@@ -97,7 +92,7 @@ Default behavior is strict:
 - The remaining queue is **dynamic**. Newly discovered in-scope issues are added to the goal and must be resolved before completion.
 - Discovered issues can be **renamed, merged, deduplicated, superseded, or resolved under clearer wording** only with evidence-backed `issueResolutions`.
 - Completion requires **inspection evidence, validation proof, verification results, requirement coverage, no remaining work, no blockers, resolved or evidence-covered discovered issues, and a completion audit**.
-- Tool drift is controlled. After three non-goal tool calls without `goal_system_update`, Copilot gets a warning. After five, non-goal tools are denied until the goal is updated.
+- Tool drift is controlled. After three non-goal tool calls without `goal_system_update`, Copilot gets a warning. At five, non-goal tools are denied until the goal is updated.
 - Stop hooks are blocked while an open goal remains active, with a hard continuation directive that tells Copilot to reload status, continue work, update persisted state, and close only with evidence.
 
 ## Install details
@@ -123,7 +118,7 @@ For VS Code Copilot Chat, the installer:
 
 1. Installs `~/.copilot/agents/goal-system.agent.md`.
 2. Installs `~/.copilot/hooks/goal-system-vscode.json`.
-3. Adds the `goalSystem` stdio MCP server to the VS Code user `mcp.json`.
+3. Adds the `goalSystem` stdio MCP server to the VS Code profile `mcp.json`.
 4. Reuses the same package under `~/.copilot/extensions/goal-system/`.
 
 The installer preserves existing settings and writes backups before changing JSON or Markdown files.
@@ -183,7 +178,7 @@ cd tests/fixtures/sample-goal-project
 npm test
 ```
 
-That test is supposed to fail before an agent fixes it. The runtime E2E prompt uses it to prove Copilot inspected, fixed, verified, updated the goal, and closed only with evidence.
+Expected result: fail before a goal session fixes it. The runtime E2E prompt uses the fixture to prove Copilot inspected, fixed, verified, updated the goal, and closed only with evidence.
 
 ## Docs
 

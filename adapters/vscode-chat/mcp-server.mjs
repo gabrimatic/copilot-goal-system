@@ -99,7 +99,7 @@ async function openHandler(args) {
   const { sessionId, cwd, record } = await loadGoal(args);
   if (record && isOpenGoal(record.goal) && args.replaceExisting !== true) {
     return toolResult(
-      "An active persisted goal already exists for this VS Code Chat session/workspace. Use goal_system_update to continue it, or call goal_system_open with replaceExisting: true only when the user clearly intends to replace the current goal.",
+      "An active persisted goal already exists for this VS Code Chat session/workspace. Use goal_system_update to continue it, or call goal_system_open with replaceExisting: true only when the prompt clearly replaces the current goal.",
       true
     );
   }
@@ -123,7 +123,7 @@ async function updateHandler(args) {
     return toolResult("No persisted goal exists yet. Use goal_system_open first with the current sessionId and cwd.", true);
   }
   if (!isOpenGoal(record.goal)) {
-    return toolResult("The persisted goal is already closed. Open a new goal only when the user explicitly asks for one.", true);
+    return toolResult("The persisted goal is already closed. Open a new goal only when the prompt explicitly asks for one.", true);
   }
   if (typeof args.completionStatus === "string" && !MUTABLE_GOAL_STATUSES.includes(args.completionStatus)) {
     return toolResult("goal_system_update cannot mark a goal complete or cancelled. Use goal_system_close after verification.", true);

@@ -1,7 +1,7 @@
 {
   "name": "copilot-goal-system",
   "displayName": "Copilot Goal System",
-  "description": "One-command installer for persisted goal mode in GitHub Copilot CLI and VS Code Copilot Chat.",
+  "description": "Install persisted goal mode for GitHub Copilot CLI and VS Code Copilot Chat.",
   "version": "1.1.5",
   "publisher": "gabrimatic",
   "author": {
@@ -136,33 +136,33 @@
           "type": "string",
           "default": "",
           "scope": "machine",
-          "description": "Optional home directory override for install and status commands. Leave empty to use the current OS user home."
+          "description": "Set a home directory for install and status commands. Leave empty to use the current OS account home."
         },
         "copilotGoalSystem.showStatusAfterInstall": {
           "type": "boolean",
           "default": true,
-          "description": "Show an install status report after installing or updating the goal system."
+          "description": "Show the install status report after install or update."
         },
         "copilotGoalSystem.promptOnFirstRun": {
           "type": "boolean",
           "default": true,
-          "description": "Show one first-run setup prompt when the goal system is not installed into the local Copilot CLI profile."
+          "description": "Show one setup prompt when the local Copilot profile is missing the goal system."
         },
         "copilotGoalSystem.promptOnUpdate": {
           "type": "boolean",
           "default": true,
-          "description": "Prompt after extension updates when the installed local Copilot runtime files are older than the bundled files."
+          "description": "Prompt after extension updates when local Copilot runtime files are older than the bundled files."
         },
         "copilotGoalSystem.showStatusBar": {
           "type": "boolean",
           "default": true,
-          "description": "Show a compact Copilot Goal System status item in the VS Code status bar."
+          "description": "Show the compact Copilot Goal System item in the VS Code status bar."
         },
         "copilotGoalSystem.vscodeMcpConfigPathOverride": {
           "type": "string",
           "default": "",
           "scope": "machine",
-          "description": "Optional VS Code MCP user configuration path override. Leave empty to use the current VS Code profile path."
+          "description": "Set a custom VS Code MCP config path. Leave empty to use the detected VS Code profile path."
         }
       }
     },
@@ -170,12 +170,12 @@
       {
         "id": "copilotGoalSystem.setup",
         "title": "Set Up Copilot Goal System",
-        "description": "Install persisted goal mode for GitHub Copilot CLI and VS Code Copilot Chat.",
+        "description": "Persist one active goal for GitHub Copilot CLI and VS Code Copilot Chat.",
         "steps": [
           {
             "id": "install",
             "title": "Install or update the local goal system",
-            "description": "Run the install command to copy the bundled goal system, install production dependencies, merge CLI hooks, add the VS Code Chat custom agent, and configure the local MCP server.",
+            "description": "Copy the bundled goal system, install production dependencies, merge CLI hooks, add the VS Code Chat custom agent, and configure the local MCP server.",
             "media": {
               "image": "media/walkthrough-install.svg",
               "altText": "Goal system install flow"
@@ -187,7 +187,7 @@
           {
             "id": "status",
             "title": "Check installation status",
-            "description": "Run the status command to confirm the extension files, dependencies, CLI hooks, VS Code Chat hooks, custom agent, and MCP configuration are present.",
+            "description": "Confirm extension files, dependencies, CLI hooks, VS Code Chat hooks, custom agent, and MCP configuration.",
             "media": {
               "image": "media/walkthrough-status.svg",
               "altText": "Goal system status checks"
@@ -199,7 +199,7 @@
           {
             "id": "try",
             "title": "Try a real goal",
-            "description": "Copy the runtime E2E prompt, paste it into Copilot CLI or VS Code Copilot Chat, and confirm the goal system forces inspect, fix, update, verify, and close behavior.",
+            "description": "Copy the runtime E2E prompt, paste it into Copilot, and confirm the goal loop inspects, fixes, updates, verifies, and closes with proof.",
             "media": {
               "image": "media/walkthrough-prompt.svg",
               "altText": "Runtime goal prompt"

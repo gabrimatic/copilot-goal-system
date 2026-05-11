@@ -1,12 +1,12 @@
 # Architecture
 
-Copilot Goal System is a small persisted state machine with host-specific adapters.
+Copilot Goal System is a local state machine with host-specific adapters.
 
-It has one shared core:
+Shared core:
 
 - `lib/goal-core.mjs` stores goals, validates completion, formats summaries, redacts sensitive text, and tracks persisted tool history.
 
-It has two adapters:
+Adapters:
 
 - **Copilot CLI stable adapter:** skill, Copilot SDK tools, and CLI hooks.
 - **VS Code Chat preview adapter:** custom agent, MCP tools, and VS Code agent hooks.
@@ -14,7 +14,7 @@ It has two adapters:
 ## Data flow
 
 ```text
-User starts /goal
+Prompt starts /goal
   -> adapter injects sessionId/cwd and any existing goal context
   -> explicit activation creates a persisted draft goal before substantive work begins
   -> skill or custom agent tells Copilot to use goal_system_* tools
@@ -43,11 +43,11 @@ The duplicated writes are intentional. They let the system survive session resum
 
 The session id and cwd hash are both part of the lookup model. Three main sessions can run in the same directory and each will read only its own session goal during normal operation.
 
-Same-directory continuation is intentionally conservative:
+Same-directory continuation is conservative:
 
 - zero open goals: do not pretend a goal exists
 - one open goal: allow explicit continuation from that persisted record
-- duplicate records for the same resumed goal id: treat as one goal and pick the newest copy
+- duplicate records for the same resumed goal id: treat them as one goal and pick the newest copy
 - two or more open goals: refuse automatic continuation and ask for the intended session or goal id
 
 Subagents do not get goal ownership. Lifecycle hooks give them a boundary message, SDK goal tools reject subagent-looking invocations, VS Code Chat hooks do not expose goal state to subagents, and post-tool history ignores subagent tool use. A main session may record subagent output only after checking the real evidence.
@@ -87,7 +87,7 @@ Durable evidence fields append by default. `remaining` and `blockers` replace by
 
 `discoveredIssues` is additive because horizon tasks reveal work over time. If an inspection expands the task from three issues to ten, the full ten stay in the durable issue set. `remaining` is replaceable because it represents the current live queue, not a permanent history log.
 
-`issueResolutions` records safe issue evolution. A discovered issue can be marked `resolved`, `merged`, `renamed`, `duplicate`, or `superseded` only when the entry names the original issue and includes evidence. Wildcard references such as "all issues" are rejected, so the model cannot bypass the completion gate by manufacturing literal resolved strings.
+`issueResolutions` records safe issue evolution. A discovered issue can be marked `resolved`, `merged`, `renamed`, `duplicate`, or `superseded` only when the entry names the original issue and includes evidence. Wildcard references such as "all issues" are rejected, so Copilot cannot bypass the completion gate by manufacturing literal resolved strings.
 
 ## Status model
 

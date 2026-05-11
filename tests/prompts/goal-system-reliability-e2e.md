@@ -1,6 +1,6 @@
 # Goal-System Reliability E2E Prompt
 
-Use this prompt inside Copilot CLI after installing the goal system. It is intentionally a real task with a failing test, not a hardcoded fact assertion.
+Use this prompt inside Copilot CLI after installing the goal system. It is a real task with a failing test, not a hardcoded fact assertion.
 
 ```text
 /goal

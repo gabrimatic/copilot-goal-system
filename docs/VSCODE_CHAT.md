@@ -1,6 +1,6 @@
 # VS Code Copilot Chat
 
-The VS Code Copilot Chat adapter brings persisted goal mode to official VS Code Chat through a custom agent, lifecycle hooks, and a local MCP server.
+The VS Code Copilot Chat adapter brings persisted goal mode into VS Code through a custom agent, lifecycle hooks, and a local MCP server.
 
 This adapter is **preview** because VS Code agent hooks and agent plugins are Preview surfaces. The Copilot CLI adapter remains the stable strict mode.
 
@@ -44,19 +44,19 @@ Then select the `Goal System` custom agent in Copilot Chat.
 After Marketplace extension updates, VS Code compares the bundled runtime version with the local files in `~/.copilot/extensions/goal-system/`. If local files are stale, the status bar changes to `Goal Update` and VS Code prompts you to update them.
 Updating local files replaces the installed runtime snapshot, so stale files from older releases do not keep running.
 
-## Installed Files
+## Installed files
 
 | Path | Purpose |
 |------|---------|
 | `~/.copilot/extensions/goal-system/` | Shared package, core, adapters, tests, docs, and dependencies. |
 | `~/.copilot/agents/goal-system.agent.md` | VS Code custom agent instructions. |
 | `~/.copilot/hooks/goal-system-vscode.json` | VS Code hook config with PascalCase lifecycle events. |
-| VS Code user `mcp.json` | Adds the `goalSystem` stdio MCP server. |
+| VS Code profile `mcp.json` | Adds the `goalSystem` stdio MCP server. |
 | `~/.copilot/session-state/goal-system/` | Shared persisted goal state. |
 
 The installer writes backups before changing an existing MCP config, hook config, or custom agent file.
 
-## What It Enforces
+## Enforcement
 
 The VS Code Chat adapter uses official VS Code hook events:
 
@@ -89,14 +89,14 @@ goal_system_close
 
 All tools require the `sessionId` and `cwd` that the hook injects into the chat context. This keeps VS Code Chat sessions isolated even when several sessions share one workspace.
 
-## Current Limits
+## Limits
 
 - VS Code hooks are Preview and can change.
 - Organizations can disable hooks or MCP.
-- The adapter cannot force goal behavior if the user does not use the `Goal System` agent and the model ignores available MCP tools.
+- The adapter cannot force goal behavior if you do not select the `Goal System` agent and Copilot ignores available MCP tools.
 - Hook output depends on VS Code honoring the documented lifecycle events.
 
-When those surfaces are enabled, the adapter gives VS Code Chat the same core persistence, drift control, subagent boundary, and proof-based completion rules as the CLI adapter.
+With those surfaces available, VS Code Chat gets the same core persistence, drift control, subagent boundary, and proof-based completion rules as the CLI adapter.
 
 ## Troubleshooting
 

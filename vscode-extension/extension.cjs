@@ -378,7 +378,7 @@ async function maybeOfferFirstInstall(context, output, statusBar) {
   }
 
   const choice = await vscode.window.showInformationMessage(
-    "Set up Copilot Goal System for Copilot CLI and VS Code Copilot Chat.",
+    "Set up persisted goal mode for Copilot CLI and VS Code Copilot Chat.",
     "Set Up Now",
     "Open Walkthrough",
     "Show Status",
@@ -407,7 +407,7 @@ async function maybeOfferRuntimeUpdate(context, output, statusBar) {
   if (context.globalState.get(promptKey)) return;
 
   const choice = await vscode.window.showInformationMessage(
-    `Copilot Goal System ${status.bundledVersion} includes updated local runtime files. Installed local files are ${status.installedVersion || "unknown"}.`,
+    `Copilot Goal System ${status.bundledVersion} has newer local runtime files. Installed local files are ${status.installedVersion || "unknown"}.`,
     "Update Local Files",
     "Show Status",
     "Later"
@@ -578,7 +578,7 @@ async function copyRuntimePrompt(context) {
   try {
     const prompt = await fsp.readFile(promptPath, "utf8");
     await vscode.env.clipboard.writeText(prompt);
-    vscode.window.showInformationMessage("Runtime E2E prompt copied. Paste it into Copilot CLI or VS Code Copilot Chat after installing the goal system.");
+    vscode.window.showInformationMessage("Runtime E2E prompt copied. Paste it into Copilot after installing the goal system.");
   } catch (error) {
     vscode.window.showErrorMessage(`Could not copy the runtime prompt: ${error.message || String(error)}`);
   }

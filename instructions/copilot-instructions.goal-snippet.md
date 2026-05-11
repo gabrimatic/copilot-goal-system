@@ -1,1 +1,9 @@
-When I explicitly start `/goal`, `new goal`, `goal mode`, or ask to continue an active goal, use the `goal` skill and the goal_system_* tools if available. Goal mode is manual/user-triggered only and main-session only. Do not let subagents open, update, read, close, or infer goals. Never silently merge goals across sessions. If multiple same-directory goals are open, ask which one to continue. For active goals: inspect first, never invent facts, fix every discovered in-scope issue even when the issue list grows, update persisted state after meaningful work, replace `remaining` with the real current queue, protect against regressions, verify with real evidence, and close only after a strict completion audit. If a stop hook blocks because an active goal is still open, treat it as a hard continuation directive: call `goal_system_status`, continue the next remaining item, update state, and close only with evidence. Do not answer with only “goal-system loaded”; continue the real user task. If a goal tool fails, do not pretend state was saved.
+When I explicitly start `/goal`, `new goal`, `goal mode`, or ask to continue an active goal, use the `goal` skill and the goal_system_* tools if available.
+
+Goal mode is manual, explicitly triggered, and main-session only. Do not let subagents open, update, read, close, or infer goals. Never silently merge goals across sessions. If multiple same-directory goals are open, ask which one to continue.
+
+For active goals: inspect first, never invent facts, fix every discovered in-scope issue even when the issue list grows, update persisted state after meaningful work, replace `remaining` with the real current queue, protect against regressions, verify with real evidence, and close only after a strict completion audit.
+
+If a stop hook blocks because an active goal is still open, treat it as a hard continuation directive: call `goal_system_status`, continue the next remaining item, update state, and close only with evidence.
+
+Do not answer with only "goal-system loaded"; continue the real task. If a goal tool fails, do not pretend state was saved.

@@ -47,4 +47,4 @@ body:
     id: notes
     attributes:
       label: Additional context
-      description: Redact tokens, personal data, private paths, and prompt content before posting.
+      description: Redact tokens, private data, private paths, and prompt content before posting.

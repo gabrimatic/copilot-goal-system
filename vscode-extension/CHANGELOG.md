@@ -28,13 +28,13 @@
 
 - Prompts to update local Copilot runtime files when the extension bundle is newer than `~/.copilot/extensions/goal-system/`.
 - Adds status report fields for extension version, installed runtime version, and runtime update state.
-- Adds evidence-backed issue-resolution support for safer goal completion when discovered issues are renamed, merged, duplicated, superseded, or clarified.
+- Adds evidence-backed issue-resolution support for renamed, merged, duplicate, superseded, or clarified discovered issues.
 
 ## 1.1.0
 
 - Adds `Copilot Goal System: Install Recommended Setup` for CLI plus VS Code Chat setup.
 - Adds separate CLI-only and VS Code Chat-only install commands.
-- Adds status checks for the VS Code Chat custom agent, hook config, MCP server, and MCP user config.
+- Adds status checks for the VS Code Chat custom agent, hook config, MCP server, and MCP config.
 - Updates walkthrough and Marketplace copy for VS Code Copilot Chat preview support.
 
 ## 1.0.2
@@ -49,7 +49,7 @@
 
 - Adds a first-run setup prompt after the extension is installed in VS Code.
 - Clarifies Marketplace documentation for install behavior, commands, requirements, and updates.
-- Adds official author metadata.
+- Adds Marketplace author metadata.
 - Generates the bundled goal-system package from the repository source during packaging.
 
 ## 1.0.0

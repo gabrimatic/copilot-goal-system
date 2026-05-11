@@ -1,6 +1,6 @@
 {
   "name": "goal-system",
-  "description": "Main-session goal-mode persistence, continuity, proof gates, and strict completion discipline for GitHub Copilot CLI and VS Code Copilot Chat.",
+  "description": "Main-session goal mode for GitHub Copilot CLI and VS Code Copilot Chat, with local continuity, drift blocking, and proof gates.",
   "version": "1.1.5",
   "author": {
     "name": "Soroush Yousefpour"
