@@ -9,14 +9,38 @@ async function readJson(relativePath) {
   return JSON.parse(await readFile(path.join(root, relativePath), "utf8"));
 }
 
+async function readText(relativePath) {
+  return await readFile(path.join(root, relativePath), "utf8");
+}
+
 function fail(message) {
   console.error(message);
   process.exitCode = 1;
 }
 
+function checkLockVersion(lock, filePath, expectedVersion) {
+  if (lock.version && lock.version !== expectedVersion) {
+    fail(`Version mismatch: ${filePath} is ${lock.version}, package.json is ${expectedVersion}.`);
+  }
+  const rootPackage = lock.packages?.[""];
+  if (rootPackage?.version && rootPackage.version !== expectedVersion) {
+    fail(`Version mismatch: ${filePath} packages[""].version is ${rootPackage.version}, package.json is ${expectedVersion}.`);
+  }
+}
+
+function checkChangelog(changelog, filePath, expectedVersion) {
+  if (!new RegExp(`^##\\s+${expectedVersion.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "m").test(changelog)) {
+    fail(`${filePath} must contain a ## ${expectedVersion} entry before release.`);
+  }
+}
+
 const rootPackage = await readJson("package.json");
 const vscodePackage = await readJson("vscode-extension/package.json");
 const pluginPackage = await readJson("plugin.json");
+const rootLock = await readJson("package-lock.json");
+const vscodeLock = await readJson("vscode-extension/package-lock.json");
+const rootChangelog = await readText("CHANGELOG.md");
+const vscodeChangelog = await readText("vscode-extension/CHANGELOG.md");
 
 if (rootPackage.version !== vscodePackage.version) {
   fail(`Version mismatch: package.json is ${rootPackage.version}, vscode-extension/package.json is ${vscodePackage.version}.`);
@@ -41,3 +65,8 @@ if (rootPackage.repository?.url && vscodePackage.repository?.url) {
 if (!vscodePackage.author?.name) {
   fail("vscode-extension/package.json must include author.name.");
 }
+
+checkLockVersion(rootLock, "package-lock.json", rootPackage.version);
+checkLockVersion(vscodeLock, "vscode-extension/package-lock.json", vscodePackage.version);
+checkChangelog(rootChangelog, "CHANGELOG.md", rootPackage.version);
+checkChangelog(vscodeChangelog, "vscode-extension/CHANGELOG.md", vscodePackage.version);

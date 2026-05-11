@@ -75,6 +75,40 @@ test("installer merges hooks, writes backups, and preserves existing settings", 
   await rm(home, { recursive: true, force: true });
 });
 
+test("installer replaces stale runtime files and avoids unchanged settings backups", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-stale-runtime-"));
+  const copilotDir = path.join(home, ".copilot");
+
+  await execFileAsync("mkdir", ["-p", path.join(copilotDir, "extensions", "goal-system", "obsolete")]);
+  await writeFile(path.join(copilotDir, "extensions", "goal-system", "obsolete", "old-file.txt"), "stale");
+
+  await execFileAsync(process.execPath, [installer], {
+    cwd: root,
+    env: { ...process.env, HOME: home },
+    maxBuffer: 1024 * 1024 * 8,
+  });
+
+  await assert.rejects(
+    readFile(path.join(copilotDir, "extensions", "goal-system", "obsolete", "old-file.txt"), "utf8"),
+    /ENOENT/
+  );
+
+  const firstFindResult = await execFileAsync("find", [copilotDir, "-name", "settings.json.backup-*"], { encoding: "utf8" });
+  const firstBackups = firstFindResult.stdout.trim().split("\n").filter(Boolean);
+
+  await execFileAsync(process.execPath, [installer], {
+    cwd: root,
+    env: { ...process.env, HOME: home },
+    maxBuffer: 1024 * 1024 * 8,
+  });
+
+  const secondFindResult = await execFileAsync("find", [copilotDir, "-name", "settings.json.backup-*"], { encoding: "utf8" });
+  const secondBackups = secondFindResult.stdout.trim().split("\n").filter(Boolean);
+  assert.equal(secondBackups.length, firstBackups.length);
+
+  await rm(home, { recursive: true, force: true });
+});
+
 test("installer refuses corrupt settings instead of overwriting them", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-bad-json-"));
   const copilotDir = path.join(home, ".copilot");

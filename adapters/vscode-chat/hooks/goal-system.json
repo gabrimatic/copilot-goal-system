@@ -8,6 +8,14 @@
         "timeout": 5
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "type": "command",
+        "command": "node \"$HOME/.copilot/extensions/goal-system/adapters/vscode-chat/hook-runner.mjs\"",
+        "windows": "node \"%USERPROFILE%\\.copilot\\extensions\\goal-system\\adapters\\vscode-chat\\hook-runner.mjs\"",
+        "timeout": 5
+      }
+    ],
     "PreToolUse": [
       {
         "type": "command",

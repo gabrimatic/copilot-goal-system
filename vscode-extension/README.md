@@ -24,13 +24,15 @@ The Marketplace **Install** button installs the VS Code extension. The command i
 
 The installer preserves existing Copilot and VS Code MCP settings and writes backups before changing files. On first startup, VS Code offers a one-time setup prompt and a compact status bar item so you do not need to discover the command manually.
 
-After extension updates, VS Code compares the extension bundle with the installed files in `~/.copilot/extensions/goal-system/`. If the local runtime is stale, the status bar changes to `Goal Update` and VS Code prompts you to update the local Copilot files.
+After extension updates, VS Code compares the extension bundle with the installed files in `~/.copilot/extensions/goal-system/`. If the local runtime is stale, the status bar changes to `Goal Update` and VS Code prompts you to update the local Copilot files. Updates replace the installed runtime snapshot so stale files from older releases do not remain active.
 
 ## Features
 
 - Persists one active goal for the main Copilot session.
+- Creates a persisted draft goal immediately when VS Code Chat receives an explicit `/goal` prompt.
 - Restores compact goal context after resume, compaction, and session restarts.
 - Isolates same-directory sessions so parallel work does not share goal state by accident.
+- Loads one unambiguous same-directory goal on explicit continuation instead of relying on chat memory.
 - Keeps subagents outside goal ownership; only the main session can open, read, update, or close goals.
 - Tracks newly discovered in-scope issues as the task grows.
 - Tracks renamed, merged, duplicate, superseded, and clearer-worded issues through evidence-backed issue resolutions.
@@ -97,6 +99,7 @@ The installer uses the current OS user's home directory by default. Set `copilot
 - Goal state belongs to the main session only.
 - Subagents cannot open, read, update, or close goals.
 - Same-directory sessions stay isolated.
+- Duplicate records for the same resumed goal are treated as one goal during continuation.
 - Newly discovered in-scope issues are added to the live goal queue.
 - Renamed, merged, duplicate, superseded, and clearer-worded discovered issues need specific evidence-backed issue resolutions.
 - Completion is refused without inspection evidence, verification results, requirement coverage, no remaining work, no blockers, resolved or evidence-covered discovered issues, and a completion audit.
@@ -110,6 +113,7 @@ Copilot Goal System: Install Recommended Setup
 ```
 
 The source repository is the single editable source for the goal-system runtime. The Marketplace package contains a generated bundled copy so the installer works offline after the VSIX is installed.
+The local runtime update replaces the installed snapshot rather than overlaying files.
 
 ## Documentation
 

@@ -16,6 +16,7 @@ It has two adapters:
 ```text
 User starts /goal
   -> adapter injects sessionId/cwd and any existing goal context
+  -> explicit activation creates a persisted draft goal before substantive work begins
   -> skill or custom agent tells Copilot to use goal_system_* tools
   -> SDK or MCP tool opens or updates persisted goal state
   -> post-tool hooks track tool history and drift
@@ -34,6 +35,7 @@ State is written to three places:
 | `~/.copilot/session-state/<session>/goal-state.json` | Session-local workspace state. |
 | `~/.copilot/session-state/goal-system/by-cwd-session/<cwd-hash>--<session>.json` | Same-directory continuation and ambiguity detection. |
 | `~/.copilot/session-state/goal-system/compact/<session>.txt` | Compact prompt snapshot written before compaction. |
+| `~/.copilot/session-state/goal-system/compact/<session>.txt.json` | Machine-readable compact snapshot metadata. |
 
 The duplicated writes are intentional. They let the system survive session resume, compaction, and same-directory continuation while refusing ambiguous multiple-goal states.
 
@@ -45,6 +47,7 @@ Same-directory continuation is intentionally conservative:
 
 - zero open goals: do not pretend a goal exists
 - one open goal: allow explicit continuation from that persisted record
+- duplicate records for the same resumed goal id: treat as one goal and pick the newest copy
 - two or more open goals: refuse automatic continuation and ask for the intended session or goal id
 
 Subagents do not get goal ownership. Lifecycle hooks give them a boundary message, SDK goal tools reject subagent-looking invocations, VS Code Chat hooks do not expose goal state to subagents, and post-tool history ignores subagent tool use. A main session may record subagent output only after checking the real evidence.
@@ -122,6 +125,7 @@ The VS Code Chat adapter uses:
 - `adapters/vscode-chat/mcp-server.mjs`
 
 VS Code hooks inject `sessionId` and `cwd` into the chat context. MCP tools require those values so multiple sessions in one workspace stay isolated. Persisted tool history drives drift enforcement across VS Code hook invocations.
+`UserPromptSubmit` also gives VS Code Chat the same activation and continuation bridge as the CLI path: `/goal` creates a persisted draft goal immediately, and an explicit continue prompt can hydrate one unambiguous same-directory goal into the current session.
 
 ## Drift enforcement
 

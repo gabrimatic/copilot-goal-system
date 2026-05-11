@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Fixes `/goal` slash-command activation detection so adapters that rely on shared activation logic create persisted goals correctly.
+- Makes VS Code Chat persist a draft goal on explicit `/goal` prompts and load one unambiguous same-directory goal on explicit continuation.
+- Registers the VS Code Chat `UserPromptSubmit` hook in installed hook config and status checks.
+- Replaces installed runtime snapshots during updates so stale files removed from newer releases do not remain active.
+- Writes compact snapshots as both readable text and machine-readable JSON.
+- Strengthens release checks for lockfile version drift and changelog coverage.
+
 ## 1.1.4
 
 - Strengthens stop-time continuation with a hard directive to reload status, continue work, update state, and close only with evidence.

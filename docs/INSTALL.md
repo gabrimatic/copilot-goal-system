@@ -109,6 +109,7 @@ The VS Code Chat adapter adds these hook events:
 
 ```text
 SessionStart
+UserPromptSubmit
 PreToolUse
 PostToolUse
 PreCompact
@@ -116,6 +117,8 @@ SubagentStart
 SubagentStop
 Stop
 ```
+
+`UserPromptSubmit` is required for VS Code Chat to persist a draft goal immediately when the user starts `/goal`, inject active-goal context on each prompt, and load one unambiguous same-directory goal when the user asks to continue.
 
 ## Update
 
@@ -142,6 +145,8 @@ For both adapters:
 ```
 
 Restart Copilot CLI after updating.
+
+Updates replace the installed runtime snapshot instead of overlaying files, so files removed from newer releases do not remain active in `~/.copilot/extensions/goal-system/`.
 
 ## Automated Marketplace Publish
 

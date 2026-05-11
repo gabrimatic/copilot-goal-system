@@ -51,6 +51,8 @@ VS Code provides the surfaces this implementation uses:
 
 The adapter is preview because VS Code hooks and agent plugins are Preview surfaces and can be disabled by organization policy.
 
+`UserPromptSubmit` is part of the enforcement path, not just a reminder: it persists draft goals on explicit activation and handles same-directory continuation before the session can drift into an untracked conversation.
+
 ## Model-runtime wrappers
 
 Not stable as a generic target.

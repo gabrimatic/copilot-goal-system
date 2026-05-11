@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Creates persisted draft goals from explicit `/goal` prompts in VS Code Chat instead of relying only on agent instructions.
+- Loads one unambiguous same-directory goal on explicit continuation in VS Code Chat.
+- Installs and checks the `UserPromptSubmit` hook for the VS Code Chat adapter.
+- Replaces installed local runtime snapshots during updates so stale files from older releases do not remain active.
+
 ## 1.1.4
 
 - Strengthens blocked-stop behavior with a hard continuation directive.

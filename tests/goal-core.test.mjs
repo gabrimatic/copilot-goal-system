@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  ACTIVATION_REGEX,
   GoalStore,
   appendGoalHistory,
   buildDriftEnforcement,
@@ -33,6 +34,13 @@ test("safeSessionId prevents path traversal", () => {
 test("activation prompt objective is trimmed without inventing facts", () => {
   assert.equal(trimmedPromptObjective("/goal polish every page"), "polish every page");
   assert.equal(trimmedPromptObjective("new goal: fix tests"), "fix tests");
+});
+
+test("activation regex recognizes slash-command and natural-language goal prompts", () => {
+  assert.equal(ACTIVATION_REGEX.test("/goal polish every page"), true);
+  assert.equal(ACTIVATION_REGEX.test("please use /goal and fix the repo"), true);
+  assert.equal(ACTIVATION_REGEX.test("keep working until this is done"), true);
+  assert.equal(ACTIVATION_REGEX.test("ordinary one-off question"), false);
 });
 
 test("redaction removes sensitive values from persisted previews and history", () => {
@@ -346,8 +354,33 @@ test("GoalStore isolates same-directory goals by session and hydrates only unamb
 
   const snapshot = await store.writeCompactSnapshot("session-a", cwd, first);
   assert.match(snapshot, /Objective: first goal/);
+  const compactText = await readFile(path.join(root, "goals", "compact", "session-a.txt"), "utf8");
+  assert.match(compactText, /Objective: first goal/);
   const compactJson = await readFile(path.join(root, "goals", "compact", "session-a.txt.json"), "utf8");
   assert.match(compactJson, /first goal/);
+
+  await rm(root, { recursive: true, force: true });
+});
+
+test("GoalStore treats the same open goal resumed in multiple sessions as one continuation candidate", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "goal-store-resume-"));
+  const store = new GoalStore({ stateRoot: path.join(root, "goals"), workspaceStateRoot: path.join(root, "workspace") });
+  await store.init();
+
+  const cwd = path.join(root, "project");
+  const original = createGoalRecord({ objective: "resume me" }, "session-a", cwd);
+  const resumed = { ...original, updatedAt: "2999-01-01T00:00:00.000Z" };
+
+  await store.persistGoalRecord("session-a", cwd, original);
+  await store.persistGoalRecord("session-b", cwd, resumed);
+
+  const candidates = await store.loadWorkspaceGoalCandidates(cwd);
+  assert.equal(candidates.length, 2);
+
+  const single = store.pickSingleOpenWorkspaceGoal(candidates);
+  assert.equal(single.openCount, 1);
+  assert.equal(single.record.goal.id, original.id);
+  assert.equal(single.record.goal.sessionId, "session-b");
 
   await rm(root, { recursive: true, force: true });
 });

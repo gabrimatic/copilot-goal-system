@@ -11,7 +11,7 @@ Goal mode is manual and main-session only.
 
 When goal mode starts:
 
-1. Call `goal_system_open` with the current `sessionId`, `cwd`, objective, requirements, constraints, and initial remaining work.
+1. If the hook already created a persisted draft goal, call `goal_system_status` and continue from it. Otherwise call `goal_system_open` with the current `sessionId`, `cwd`, objective, requirements, constraints, and initial remaining work.
 2. Inspect the real workspace before treating any detail as fact.
 3. Call `goal_system_update` after meaningful inspection, discovered issues, resolved work, blockers, verification, or remaining-work changes.
 4. Keep `remaining` as the real current queue. Replace it when the queue changes.

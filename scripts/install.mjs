@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { chmod, copyFile, cp, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { chmod, copyFile, cp, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -102,9 +102,17 @@ async function writeTextAtomic(filePath, text, options = {}) {
     await writeFile(`${filePath}.backup-${stamp()}`, original, "utf8");
   }
 
-  const tempPath = `${filePath}.tmp-${process.pid}`;
+  const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
   await writeFile(tempPath, text, "utf8");
   await rename(tempPath, filePath);
+}
+
+async function sameFilesystemPath(left, right) {
+  const [leftReal, rightReal] = await Promise.all([
+    realpath(left).catch(() => path.resolve(left)),
+    realpath(right).catch(() => path.resolve(right)),
+  ]);
+  return leftReal === rightReal;
 }
 
 function defaultVscodeMcpConfigPath() {
@@ -145,11 +153,7 @@ async function mergeSettingsHooks() {
     settings.hooks[eventName] = merged;
   }
 
-  if (originalSettings !== null) {
-    await writeFile(`${settingsPath}.backup-${stamp()}`, originalSettings, "utf8");
-  }
-
-  await writeTextAtomic(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, { backup: false });
+  await writeTextAtomic(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
 }
 
 async function appendInstructionsSnippet() {
@@ -169,21 +173,31 @@ async function appendInstructionsSnippet() {
 }
 
 async function installFiles() {
-  await mkdir(extensionDir, { recursive: true });
+  await mkdir(path.dirname(extensionDir), { recursive: true });
+  if (!(await sameFilesystemPath(root, extensionDir))) {
+    const tempExtensionDir = path.join(path.dirname(extensionDir), `.goal-system-install-${process.pid}-${Date.now()}`);
+    try {
+      await cp(root, tempExtensionDir, {
+        recursive: true,
+        force: true,
+        filter: (source) => {
+          const relative = path.relative(root, source);
+          if (!relative) return true;
+          const parts = relative.split(path.sep);
+          return !parts.includes("node_modules") && !parts.includes(".git") && !parts.includes("dist") && !parts.includes("vscode-extension");
+        },
+      });
+      await rm(extensionDir, { recursive: true, force: true });
+      await rename(tempExtensionDir, extensionDir);
+    } catch (error) {
+      await rm(tempExtensionDir, { recursive: true, force: true }).catch(() => {});
+      throw error;
+    }
+  }
+
   await mkdir(skillDir, { recursive: true });
   await mkdir(hookDir, { recursive: true });
   await mkdir(agentDir, { recursive: true });
-
-  await cp(root, extensionDir, {
-    recursive: true,
-    force: true,
-    filter: (source) => {
-      const relative = path.relative(root, source);
-      if (!relative) return true;
-      const parts = relative.split(path.sep);
-      return !parts.includes("node_modules") && !parts.includes(".git") && !parts.includes("dist") && !parts.includes("vscode-extension");
-    },
-  });
 
   await copyFile(path.join(root, "skills", "goal", "SKILL.md"), path.join(skillDir, "SKILL.md"));
   await copyFile(path.join(root, "hooks", "goal-context.sh"), path.join(hookDir, "goal-context.sh"));

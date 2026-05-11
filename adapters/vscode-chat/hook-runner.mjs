@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 import {
+  ACTIVATION_REGEX,
+  CONTINUE_REGEX,
   GoalStore,
   appendGoalHistory,
   buildDriftEnforcement,
   buildGoalPromptNote,
   buildStopContinuationDirective,
   countToolDrift,
+  createGoalRecord,
   formatGoalSummary,
   isGoalSystemToolName,
   isOpenGoal,
@@ -14,6 +17,7 @@ import {
   safeSessionId,
   shouldEnforceDrift,
   summarizeToolUse,
+  trimmedPromptObjective,
 } from "../../lib/goal-core.mjs";
 
 const DRIFT_WARN_THRESHOLD = 3;
@@ -104,6 +108,16 @@ function emptySessionContextNote(sessionId, cwd) {
   ].join("\n");
 }
 
+function draftActivationMessage(goal) {
+  return [
+    "A persisted draft goal was created for this VS Code Chat main session.",
+    `Goal ID: ${goal.id || "unknown"}`,
+    `Objective: ${goal.objective || "unknown until inspected"}`,
+    "Inspect the real environment before treating any detail as fact, then call goal_system_update with verified facts before doing substantive work.",
+    "Do not answer with only an acknowledgment. Continue the real user task and close only after proof.",
+  ].join("\n");
+}
+
 async function loadOpenGoal(store, sessionId, cwd) {
   const record = await store.loadGoalRecord(sessionId, cwd);
   return record && isOpenGoal(record.goal) ? record.goal : null;
@@ -128,6 +142,60 @@ async function main() {
   if (!activeGoal) {
     if (eventName === "SessionStart") {
       emitSpecific("SessionStart", { additionalContext: emptySessionContextNote(sessionId, cwd) });
+    }
+    if (eventName === "UserPromptSubmit") {
+      const prompt = normalizeText(input.prompt, 10000);
+      const isContinuePrompt = CONTINUE_REGEX.test(prompt);
+      if (ACTIVATION_REGEX.test(prompt) && !isContinuePrompt) {
+        const draftGoal = createGoalRecord(
+          {
+            objective: trimmedPromptObjective(prompt),
+            requirements: ["Inspect the real environment before treating any unverified detail as fact."],
+            doneSoFar: ["Draft goal record created from the user's explicit goal-mode prompt."],
+            remaining: [
+              "Inspect the real environment and replace draft fields with verified facts.",
+              "Execute the goal, record discovered issues, fix them, verify with evidence, and close only after audit.",
+            ],
+            completionStatus: "draft",
+          },
+          sessionId,
+          cwd,
+          {
+            sourcePrompt: prompt,
+            historyNote: "VS Code Chat draft goal created automatically from explicit activation prompt",
+          }
+        );
+        const persisted = await store.persistGoalRecord(sessionId, cwd, draftGoal);
+        store.auditLog("vscode_draft_auto", { sid: sessionId, id: persisted.id, promptHash: persisted.sourcePromptHash });
+        emit({ continue: true, systemMessage: draftActivationMessage(persisted) });
+        return;
+      }
+
+      if (!isContinuePrompt) return;
+
+      const workspaceCandidates = await store.loadWorkspaceGoalCandidates(cwd);
+      const { record: workspaceGoal, openCount } = store.pickSingleOpenWorkspaceGoal(workspaceCandidates);
+      if (workspaceGoal) {
+        const hydrated = await store.persistGoalRecord(sessionId, cwd, workspaceGoal.goal);
+        emit({
+          continue: true,
+          systemMessage: `${buildGoalPromptNote(hydrated)}\n\nA single unambiguous same-directory goal was loaded for continuation. Continue from persisted state, not memory.`,
+        });
+        return;
+      }
+      if (openCount > 1) {
+        emit({
+          continue: true,
+          systemMessage:
+            "Multiple active goals exist for this working directory across sessions. Do not guess which one to continue. Ask the user to resume the intended session or clarify the goal ID.",
+        });
+        return;
+      }
+      emit({
+        continue: true,
+        systemMessage:
+          "No persisted active goal was found for this working directory. Do not pretend a goal exists. Reconstruct from supplied artifacts or ask for the missing objective.",
+      });
     }
     return;
   }

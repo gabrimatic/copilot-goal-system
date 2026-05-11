@@ -23,6 +23,7 @@ Use this checklist after installing into your real `~/.copilot` profile.
 - The `Goal System` custom agent appears in Copilot Chat.
 - The `GitHub Copilot Chat Hooks` output channel shows goal hooks running.
 - Starting `/goal <real task>` through the `Goal System` custom agent creates a persisted goal with the injected `sessionId` and `cwd`.
+- Asking to continue a single same-directory active goal in a fresh VS Code Chat session loads that persisted goal instead of starting from memory.
 - `Stop` blocks while an open goal remains active.
 - `SubagentStart` gives subagents the boundary text without full goal details.
 

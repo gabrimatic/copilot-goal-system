@@ -40,6 +40,7 @@ test("installer can add VS Code Chat adapter without overwriting existing MCP se
   const hookConfig = JSON.parse(await readFile(path.join(home, ".copilot", "hooks", "goal-system-vscode.json"), "utf8"));
   assert.equal(hookConfig.hooks.Stop[0].type, "command");
   assert.match(hookConfig.hooks.Stop[0].command, /hook-runner\.mjs/);
+  assert.equal(Boolean(hookConfig.hooks.UserPromptSubmit), true);
   assert.equal(Boolean(hookConfig.hooks.PreToolUse), true);
   assert.equal(Boolean(hookConfig.hooks.SubagentStart), true);
 

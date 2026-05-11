@@ -25,7 +25,16 @@ const CLI_HOOK_EVENTS = [
   "postToolUseFailure",
   "notification",
 ];
-const VSCODE_HOOK_EVENTS = ["SessionStart", "PreToolUse", "PostToolUse", "PreCompact", "SubagentStart", "SubagentStop", "Stop"];
+const VSCODE_HOOK_EVENTS = [
+  "SessionStart",
+  "UserPromptSubmit",
+  "PreToolUse",
+  "PostToolUse",
+  "PreCompact",
+  "SubagentStart",
+  "SubagentStop",
+  "Stop",
+];
 
 let installInProgress = false;
 

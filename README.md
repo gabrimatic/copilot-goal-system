@@ -36,7 +36,7 @@ The Marketplace **Install** button installs the VS Code wrapper. The command abo
 - lifecycle hooks
 - the Goal System custom agent
 
-After extension updates, VS Code checks whether `~/.copilot/extensions/goal-system/` is older than the bundled runtime. If it is stale, the status bar switches to `Goal Update` and VS Code prompts you to update the local Copilot files.
+After extension updates, VS Code checks whether `~/.copilot/extensions/goal-system/` is older than the bundled runtime. If it is stale, the status bar switches to `Goal Update` and VS Code prompts you to update the local Copilot files. Updates replace the installed runtime snapshot so removed files do not linger in `~/.copilot/extensions/goal-system/`.
 
 ### Terminal
 
@@ -91,8 +91,9 @@ Make this project pass its test suite. Inspect first, fix every in-scope issue, 
 Default behavior is strict:
 
 - Goal mode is **manual**. Normal prompts do not become goals.
+- `/goal` activation is recognized as a real slash command and creates a persisted draft goal before work begins.
 - Goal state is **main-session only**. Subagents cannot open, update, read, or close goals.
-- Same-directory sessions are **isolated**. Automatic continuation happens only when exactly one open same-directory goal exists.
+- Same-directory sessions are **isolated**. Automatic continuation happens only when exactly one open same-directory goal exists, and repeated records for the same resumed goal are treated as one goal.
 - The remaining queue is **dynamic**. Newly discovered in-scope issues are added to the goal and must be resolved before completion.
 - Discovered issues can be **renamed, merged, deduplicated, superseded, or resolved under clearer wording** only with evidence-backed `issueResolutions`.
 - Completion requires **inspection evidence, validation proof, verification results, requirement coverage, no remaining work, no blockers, resolved or evidence-covered discovered issues, and a completion audit**.
@@ -126,6 +127,7 @@ For VS Code Copilot Chat, the installer:
 4. Reuses the same package under `~/.copilot/extensions/goal-system/`.
 
 The installer preserves existing settings and writes backups before changing JSON or Markdown files.
+During updates, the installer swaps the installed runtime directory with a fresh package snapshot instead of overlaying files.
 
 Repository-level hook config is optional. Copy `.github/hooks/goal-system.json` into a repository if you want the same lifecycle hooks committed with a project.
 

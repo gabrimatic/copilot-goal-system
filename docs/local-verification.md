@@ -28,6 +28,7 @@ Covered:
 
 - session ID sanitization
 - activation prompt trimming
+- slash-command `/goal` activation detection
 - sensitive value redaction
 - append-safe evidence merging
 - intentional clearing of `remaining` and `blockers`
@@ -38,6 +39,7 @@ Covered:
 - closed terminal blocked-goal handling
 - multi-session and multi-directory state isolation
 - same-directory ambiguity detection
+- same-directory continuation across resumed copies of the same goal
 - compact prompt notes
 - no raw history leakage in summaries
 - hook quiet exit with no goal
@@ -47,6 +49,7 @@ Covered:
 - preCompact snapshot side effect
 - drift blocking helper behavior
 - VS Code Chat hook output shape
+- VS Code Chat prompt activation and continuation
 - VS Code Chat stop blocking
 - VS Code Chat persisted drift tracking
 - VS Code Chat installer MCP merge behavior

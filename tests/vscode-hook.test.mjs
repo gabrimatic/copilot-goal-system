@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -61,6 +62,8 @@ async function writeGoal(home, sessionId, cwd, patch = {}) {
     ...patch,
   };
   await writeFile(path.join(sessionDir, `${sessionId}.json`), JSON.stringify(goal, null, 2));
+  const cwdHash = createHash("sha1").update(path.resolve(cwd)).digest("hex");
+  await writeFile(path.join(cwdSessionDir, `${cwdHash}--${sessionId}.json`), JSON.stringify(goal, null, 2));
   await writeFile(path.join(workspaceDir, "goal-state.json"), JSON.stringify(goal, null, 2));
   return { goal, stateRoot };
 }
@@ -179,9 +182,73 @@ test("VS Code PreCompact writes a compact snapshot through the shared goal store
   );
 
   assert.equal(result.stdout, "{\"continue\":true}");
+  const snapshotText = await readFile(path.join(stateRoot, "compact", "session-compact.txt"), "utf8");
+  assert.match(snapshotText, /Goal ID: goal-vscode-1/);
+  assert.match(snapshotText, /Remaining: finish adapter verification/);
   const snapshot = JSON.parse(await readFile(path.join(stateRoot, "compact", "session-compact.txt.json"), "utf8"));
   assert.match(snapshot.snapshot, /Goal ID: goal-vscode-1/);
   assert.match(snapshot.snapshot, /Remaining: finish adapter verification/);
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("VS Code UserPromptSubmit hydrates one unambiguous same-directory goal on explicit continue", async () => {
+  const home = path.join(tmpdir(), `goal-vscode-hook-${process.pid}-continue`);
+  const cwd = path.join(home, "project");
+  await mkdir(cwd, { recursive: true });
+  await writeGoal(home, "previous-session", cwd, {
+    id: "goal-to-continue",
+    objective: "Continue this exact goal",
+    remaining: ["finish continuation support"],
+  });
+
+  const result = await runHook(
+    {
+      hookEventName: "UserPromptSubmit",
+      sessionId: "new-session",
+      cwd,
+      prompt: "continue the active goal",
+    },
+    { HOME: home }
+  );
+
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.continue, true);
+  assert.match(parsed.systemMessage, /single unambiguous same-directory goal was loaded/);
+  assert.match(parsed.systemMessage, /Goal ID: goal-to-continue/);
+  assert.match(parsed.systemMessage, /Continue this exact goal/);
+
+  const hydrated = JSON.parse(await readFile(path.join(home, ".copilot", "session-state", "goal-system", "by-session", "new-session.json"), "utf8"));
+  assert.equal(hydrated.id, "goal-to-continue");
+  assert.equal(hydrated.sessionId, "new-session");
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("VS Code UserPromptSubmit creates a persisted draft goal on explicit activation", async () => {
+  const home = path.join(tmpdir(), `goal-vscode-hook-${process.pid}-activate`);
+  const cwd = path.join(home, "project");
+  await mkdir(cwd, { recursive: true });
+
+  const result = await runHook(
+    {
+      hookEventName: "UserPromptSubmit",
+      sessionId: "session-activate",
+      cwd,
+      prompt: "/goal fix the release flow end to end",
+    },
+    { HOME: home }
+  );
+
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.continue, true);
+  assert.match(parsed.systemMessage, /persisted draft goal was created/i);
+  assert.match(parsed.systemMessage, /inspect the real environment/i);
+
+  const goal = JSON.parse(await readFile(path.join(home, ".copilot", "session-state", "goal-system", "by-session", "session-activate.json"), "utf8"));
+  assert.equal(goal.objective, "fix the release flow end to end");
+  assert.equal(goal.completionStatus, "draft");
+  assert.match(goal.remaining.join("\n"), /Inspect the real environment/);
 
   await rm(home, { recursive: true, force: true });
 });
