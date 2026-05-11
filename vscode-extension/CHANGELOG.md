@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.5
 
 - Creates persisted draft goals from explicit `/goal` prompts in VS Code Chat instead of relying only on agent instructions.
 - Loads one unambiguous same-directory goal on explicit continuation in VS Code Chat.

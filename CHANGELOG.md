@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.5
 
 - Fixes `/goal` slash-command activation detection so adapters that rely on shared activation logic create persisted goals correctly.
 - Makes VS Code Chat persist a draft goal on explicit `/goal` prompts and load one unambiguous same-directory goal on explicit continuation.
