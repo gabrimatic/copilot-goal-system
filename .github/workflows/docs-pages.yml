@@ -1,0 +1,67 @@
+name: Docs Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "doc/**"
+      - "README.md"
+      - ".github/workflows/docs-pages.yml"
+      - "tests/docs-site.test.mjs"
+      - "install.sh"
+  pull_request:
+    branches: [main]
+    paths:
+      - "doc/**"
+      - "README.md"
+      - ".github/workflows/docs-pages.yml"
+      - "tests/docs-site.test.mjs"
+      - "install.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: docs-pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/docs-site.test.mjs
+      - run: npm install -g mint
+      - name: Validate docs
+        working-directory: doc
+        run: |
+          mint validate
+          mint broken-links
+          mint export --disable-openapi --output ../docs-export.zip
+      - name: Prepare GitHub Pages artifact
+        run: |
+          rm -rf _site
+          unzip -q docs-export.zip -d _site
+          cp install.sh _site/install.sh
+          node doc/scripts/prepare-github-pages.mjs _site "/${{ github.event.repository.name }}"
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+  deploy:
+    needs: build
+    if: ${{ github.event_name != 'pull_request' }}
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment

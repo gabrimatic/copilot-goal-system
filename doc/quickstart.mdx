@@ -1,0 +1,66 @@
+---
+title: "Quickstart"
+description: "Install Copilot Goal System and start a persisted goal."
+---
+
+Runtime: Node.js `>= 20` and either GitHub Copilot CLI or VS Code Copilot Chat.
+
+## VS Code
+
+Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=gabrimatic.copilot-goal-system).
+
+After VS Code installs the extension, run:
+
+```text
+Copilot Goal System: Install Recommended Setup
+```
+
+The Marketplace install button installs the VS Code wrapper. The command above installs the local goal system for your current OS account:
+
+- Copilot CLI stable adapter
+- VS Code Copilot Chat preview adapter
+- local MCP goal tools
+- lifecycle hooks
+- the Goal System custom agent
+
+After extension updates, VS Code checks whether `~/.copilot/extensions/goal-system/` is older than the bundled runtime. If it is stale, the status bar switches to `Goal Update` and VS Code prompts you to update the local Copilot files.
+
+## Terminal
+
+Install directly from the published docs site:
+
+```bash
+curl -fsSL https://gabrimatic.github.io/copilot-goal-system/install.sh | bash
+```
+
+Install both adapters:
+
+```bash
+curl -fsSL https://gabrimatic.github.io/copilot-goal-system/install.sh | bash -s -- --target all
+```
+
+Or clone the repository:
+
+```bash
+git clone https://github.com/gabrimatic/copilot-goal-system.git
+cd copilot-goal-system
+./install.sh
+```
+
+## Reload Copilot
+
+For CLI mode, restart Copilot CLI, then run:
+
+```text
+/skills reload
+/env
+```
+
+For VS Code Chat, reload VS Code or run `MCP: Reset Cached Tools`, then select the `Goal System` custom agent in Copilot Chat.
+
+## Start a goal
+
+```text
+/goal
+Make this project pass its test suite. Inspect first, fix every in-scope issue, verify with real evidence, and close only after the completion audit passes.
+```

@@ -4,13 +4,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org)
 [![Copilot CLI](https://img.shields.io/badge/GitHub_Copilot_CLI-supported-blue)](https://docs.github.com/copilot)
-[![VS Code Chat](https://img.shields.io/badge/VS_Code_Copilot_Chat-preview-orange)](docs/VSCODE_CHAT.md)
+[![VS Code Chat](https://img.shields.io/badge/VS_Code_Copilot_Chat-preview-orange)](https://gabrimatic.github.io/copilot-goal-system/product/vscode-chat/)
 
 Copilot Goal System keeps long-running Copilot work tied to one persisted Active Goal.
 
 It gives GitHub Copilot CLI and VS Code Copilot Chat local goal state, lifecycle hooks, subagent boundaries, drift blocking, and completion gates that require proof before a goal can close. Use it when a task needs to survive compaction, parallel sessions, subagents, and the moment where inspection turns one issue into ten.
 
-[Quick start](#quick-start) · [What it adds](#what-it-adds) · [How it works](#how-it-works) · [Docs](#docs) · [Security](./SECURITY.md)
+[Quick start](#quick-start) · [What it adds](#what-it-adds) · [How it works](#how-it-works) · [Docs](https://gabrimatic.github.io/copilot-goal-system/) · [Security](./SECURITY.md)
 
 ---
 
@@ -54,6 +54,12 @@ Clone with HTTPS:
 git clone https://github.com/gabrimatic/copilot-goal-system.git
 cd copilot-goal-system
 ./install.sh
+```
+
+Install from the published docs site:
+
+```bash
+curl -fsSL https://gabrimatic.github.io/copilot-goal-system/install.sh | bash
 ```
 
 `./install.sh` installs the Copilot CLI adapter by default. Use `./install.sh --target all` to install both CLI and VS Code Chat adapters.
@@ -184,12 +190,12 @@ Expected result: fail before a goal session fixes it. The runtime E2E prompt use
 
 | Document | Purpose |
 |----------|---------|
-| [Install guide](docs/INSTALL.md) | Install, update, uninstall, and troubleshoot setup. |
-| [VS Code Chat](docs/VSCODE_CHAT.md) | Preview adapter details, installed files, and current limits. |
-| [Architecture](docs/ARCHITECTURE.md) | State model, hooks, tools, and lifecycle rules. |
-| [Requirements](docs/requirements.md) | Goal-system contract and completion gates. |
-| [Runtime E2E review](docs/e2e-review.md) | Manual checklist for a live Copilot session. |
-| [Portability](docs/PORTABILITY.md) | Why the stable release is Copilot-first and what other CLIs would need. |
+| [Install guide](https://gabrimatic.github.io/copilot-goal-system/reference/installation/) | Install, update, uninstall, and troubleshoot setup. |
+| [VS Code Chat](https://gabrimatic.github.io/copilot-goal-system/product/vscode-chat/) | Preview adapter details, installed files, and current limits. |
+| [Architecture](https://gabrimatic.github.io/copilot-goal-system/reference/architecture/) | State model, hooks, tools, and lifecycle rules. |
+| [Requirements](https://gabrimatic.github.io/copilot-goal-system/reference/requirements/) | Goal-system contract and completion gates. |
+| [Runtime E2E review](https://gabrimatic.github.io/copilot-goal-system/operations/runtime-e2e-review/) | Manual checklist for a live Copilot session. |
+| [Portability](https://gabrimatic.github.io/copilot-goal-system/product/portability/) | Why the stable release is Copilot-first and what other CLIs would need. |
 | [Support](SUPPORT.md) | Where to report issues and what diagnostics to include. |
 
 ## Project layout
@@ -205,8 +211,7 @@ Expected result: fail before a goal session fixes it. The runtime E2E prompt use
 ├── scripts/install.mjs                   # Installer implementation
 ├── scripts/install.sh                    # Shell installer wrapper
 ├── tests/*.test.mjs                      # Local state and hook tests
-├── tests/fixtures/sample-goal-project    # Runtime E2E fixture
-└── docs/
+└── tests/fixtures/sample-goal-project    # Runtime E2E fixture
 ```
 
 ## Development

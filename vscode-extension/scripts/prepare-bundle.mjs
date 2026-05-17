@@ -18,7 +18,7 @@ const entries = [
   "README.md",
   "SECURITY.md",
   "SUPPORT.md",
-  "docs",
+  "doc",
   "extension.mjs",
   "hooks.json",
   "hooks",

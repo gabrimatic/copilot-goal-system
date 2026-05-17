@@ -3,8 +3,18 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "doc/**"
+      - "README.md"
+      - ".github/workflows/docs-pages.yml"
+      - "tests/docs-site.test.mjs"
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "doc/**"
+      - "README.md"
+      - ".github/workflows/docs-pages.yml"
+      - "tests/docs-site.test.mjs"
 
 jobs:
   verify:

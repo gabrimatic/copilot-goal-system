@@ -11,3 +11,4 @@ tmp/
 .idea/
 .vscode/
 vscode-extension/resources/
+artifacts/

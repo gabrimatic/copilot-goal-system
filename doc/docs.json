@@ -1,0 +1,62 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Copilot Goal System",
+  "description": "Persisted goal mode for GitHub Copilot CLI and VS Code Copilot Chat.",
+  "colors": {
+    "primary": "#2563eb",
+    "light": "#3b82f6",
+    "dark": "#93c5fd"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "groups": [
+      {
+        "group": "Start",
+        "pages": [
+          "index",
+          "quickstart"
+        ]
+      },
+      {
+        "group": "Product",
+        "pages": [
+          "product/vscode-chat",
+          "product/portability"
+        ]
+      },
+      {
+        "group": "Reference",
+        "pages": [
+          "reference/installation",
+          "reference/architecture",
+          "reference/requirements"
+        ]
+      },
+      {
+        "group": "Operations",
+        "pages": [
+          "operations/local-verification",
+          "operations/runtime-e2e-review"
+        ]
+      }
+    ],
+    "global": {
+      "anchors": [
+        {
+          "anchor": "GitHub",
+          "href": "https://github.com/gabrimatic/copilot-goal-system"
+        },
+        {
+          "anchor": "Marketplace",
+          "href": "https://marketplace.visualstudio.com/items?itemName=gabrimatic.copilot-goal-system"
+        }
+      ]
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/gabrimatic/copilot-goal-system"
+    }
+  }
+}
