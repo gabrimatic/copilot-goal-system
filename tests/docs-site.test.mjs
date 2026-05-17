@@ -57,12 +57,12 @@ test("Docs Pages workflow owns docs deploys and full CI ignores docs-only change
     "doc/**",
     "README.md",
     ".github/workflows/docs-pages.yml",
-    "tests/docs-site.test.mjs",
-    "install.sh"
+    "tests/docs-site.test.mjs"
   ]) {
     assert.match(ciWorkflow, new RegExp(ignoredPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
 
+  assert.doesNotMatch(ciWorkflow, /paths-ignore:[\s\S]*-\s+"install\.sh"/);
   assert.match(prepareBundle, /"doc"/);
   assert.doesNotMatch(prepareBundle, /"docs"/);
 });
