@@ -42,6 +42,7 @@ test("README points readers to the published Pages docs", async () => {
 test("Docs Pages workflow owns docs deploys and full CI ignores docs-only changes", async () => {
   const docsWorkflow = await readFile(path.join(root, ".github/workflows/docs-pages.yml"), "utf8");
   const ciWorkflow = await readFile(path.join(root, ".github/workflows/ci.yml"), "utf8");
+  const prepareBundle = await readFile(path.join(root, "vscode-extension/scripts/prepare-bundle.mjs"), "utf8");
 
   assert.match(docsWorkflow, /doc\/\*\*/);
   assert.match(docsWorkflow, /README\.md/);
@@ -61,4 +62,7 @@ test("Docs Pages workflow owns docs deploys and full CI ignores docs-only change
   ]) {
     assert.match(ciWorkflow, new RegExp(ignoredPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
+
+  assert.match(prepareBundle, /"doc"/);
+  assert.doesNotMatch(prepareBundle, /"docs"/);
 });

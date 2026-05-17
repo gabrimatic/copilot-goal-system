@@ -29,7 +29,7 @@ hooks/goal-context.sh         # CLI lifecycle hook helper
 skills/goal/SKILL.md          # Main-session goal-mode behavior contract
 scripts/install.mjs           # Installer and settings merge logic
 tests/                        # Unit and hook smoke tests
-docs/                         # Install, architecture, requirements, portability
+Published docs                # Install, architecture, requirements, portability
 ```
 
 ## Change rules
