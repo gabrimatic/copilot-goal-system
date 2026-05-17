@@ -30,7 +30,7 @@
   },
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check extension.mjs && node --check lib/goal-core.mjs && node --check adapters/vscode-chat/hook-runner.mjs && node --check adapters/vscode-chat/mcp-server.mjs && node --check scripts/install.mjs && node --check scripts/check-release.mjs && bash -n install.sh && bash -n scripts/install.sh && bash -n hooks/goal-context.sh && jq . package.json plugin.json hooks.json .github/hooks/goal-system.json adapters/vscode-chat/hooks/goal-system.json >/dev/null",
+    "check": "node --check extension.mjs && node --check lib/goal-core.mjs && node --check adapters/vscode-chat/hook-runner.mjs && node --check adapters/vscode-chat/mcp-server.mjs && node --check scripts/install.mjs && node --check scripts/check-release.mjs && node --check doc/scripts/prepare-github-pages.mjs && bash -n install.sh && bash -n scripts/install.sh && bash -n hooks/goal-context.sh && jq . package.json plugin.json hooks.json doc/docs.json .github/hooks/goal-system.json adapters/vscode-chat/hooks/goal-system.json >/dev/null",
     "verify": "npm run check && npm run release:check && npm test",
     "release:check": "node scripts/check-release.mjs",
     "vscode:prepare": "npm --prefix vscode-extension run prepare:bundle",
