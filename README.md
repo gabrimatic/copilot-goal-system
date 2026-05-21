@@ -128,6 +128,7 @@ For VS Code Copilot Chat, the installer:
 4. Reuses the same package under `~/.copilot/extensions/goal-system/`.
 
 The installer preserves existing settings and writes backups before changing JSON or Markdown files.
+During updates, it recognizes existing goal hooks written with `~`, `$HOME`, absolute paths, or wrapper commands. If a composite hook already runs `goal-context.sh`, the installer keeps that hook and avoids adding a duplicate direct goal hook.
 During updates, the installer swaps the installed runtime directory with a fresh package snapshot instead of overlaying files.
 
 Repository-level hook config is optional. Copy `.github/hooks/goal-system.json` into a repository if you want the same lifecycle hooks committed with a project.

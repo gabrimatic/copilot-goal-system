@@ -134,8 +134,36 @@ function hookCommandText(hook) {
   return [hook?.bash, hook?.command, hook?.windows].filter(Boolean).join(" ");
 }
 
+function quoteTrimmed(value) {
+  const text = String(value || "").trim();
+  if (text.length >= 2 && ((text.startsWith('"') && text.endsWith('"')) || (text.startsWith("'") && text.endsWith("'")))) {
+    return text.slice(1, -1).trim();
+  }
+  return text;
+}
+
+function normalizeDirectGoalCommand(value) {
+  let text = quoteTrimmed(value);
+  if (text === "~/.copilot/hooks/goal-context.sh") return "$HOME/.copilot/hooks/goal-context.sh";
+  if (text === "${HOME}/.copilot/hooks/goal-context.sh") return "$HOME/.copilot/hooks/goal-context.sh";
+  if (text === path.join(home, ".copilot", "hooks", "goal-context.sh")) return "$HOME/.copilot/hooks/goal-context.sh";
+  return text;
+}
+
+function isGoalContextHook(hook) {
+  const text = hookCommandText(hook);
+  return /(?:^|[\s"'`])(?:~|\$HOME|\$\{HOME\}|[^\s"'`]+)\/\.copilot\/hooks\/goal-context\.sh(?:$|[\s"'`])/.test(text);
+}
+
+function isDirectGoalContextHook(hook) {
+  if (!hook || hook.type !== "command") return false;
+  const fields = [hook.bash, hook.command, hook.windows].filter(Boolean);
+  if (fields.length !== 1) return false;
+  return normalizeDirectGoalCommand(fields[0]) === "$HOME/.copilot/hooks/goal-context.sh";
+}
+
 function isGoalSystemOwnedHook(hook) {
-  return /(?:goal-context\.sh|goal-system|hook-runner\.mjs)/.test(hookCommandText(hook));
+  return isGoalContextHook(hook) || /(?:goal-system|hook-runner\.mjs)/.test(hookCommandText(hook));
 }
 
 function removeStaleCliDriftHooks(settings) {
@@ -160,7 +188,26 @@ async function mergeSettingsHooks() {
 
   for (const [eventName, goalHooks] of Object.entries(hookEvents)) {
     const existing = Array.isArray(settings.hooks[eventName]) ? settings.hooks[eventName] : [];
-    const merged = [...existing];
+    const hasCompositeGoalHook = existing.some((hook) => isGoalContextHook(hook) && !isDirectGoalContextHook(hook));
+    const merged = [];
+    let directGoalHookInserted = false;
+
+    for (const existingHook of existing) {
+      if (isDirectGoalContextHook(existingHook)) {
+        if (!hasCompositeGoalHook && !directGoalHookInserted) {
+          merged.push(goalHooks[0]);
+          directGoalHookInserted = true;
+        }
+        continue;
+      }
+      merged.push(existingHook);
+    }
+
+    if (hasCompositeGoalHook || directGoalHookInserted) {
+      settings.hooks[eventName] = merged;
+      continue;
+    }
+
     for (const hook of goalHooks) {
       if (!merged.some((candidate) => sameHook(candidate, hook))) {
         merged.push(hook);

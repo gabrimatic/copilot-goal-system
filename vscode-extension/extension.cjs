@@ -11,6 +11,11 @@ const {
   runtimeUpdatePromptKey,
   runtimeVersionState,
 } = require("./lib/runtime-version.cjs");
+const {
+  countDuplicateGoalHooks,
+  findStaleDriftHookEvents,
+  hookInstalled,
+} = require("./lib/install-status.cjs");
 
 const DISPLAY_NAME = "Copilot Goal System";
 const DOCS_URL = "https://github.com/gabrimatic/copilot-goal-system#readme";
@@ -155,11 +160,6 @@ async function readPackageVersion(filePath) {
   return String(packageJson.version || "").trim();
 }
 
-function hookInstalled(settings, eventName) {
-  const hooks = settings && settings.hooks && Array.isArray(settings.hooks[eventName]) ? settings.hooks[eventName] : [];
-  return hooks.some((hook) => hook && hook.type === "command" && hook.bash === "$HOME/.copilot/hooks/goal-context.sh");
-}
-
 function vscodeHookConfigInstalled(config) {
   if (!config || typeof config !== "object" || !config.hooks || typeof config.hooks !== "object") return false;
   return VSCODE_HOOK_EVENTS.every((eventName) => {
@@ -234,6 +234,9 @@ async function collectStatus() {
   }
 
   const cliHookEventsPresent = settings ? CLI_HOOK_EVENTS.filter((eventName) => hookInstalled(settings, eventName)) : [];
+  const duplicateCliGoalHooks = settings ? countDuplicateGoalHooks(settings, CLI_HOOK_EVENTS) : {};
+  const staleCliDriftHookEvents = settings ? findStaleDriftHookEvents(settings) : [];
+  const cliHooksDisabled = Boolean(settings && settings.disableAllHooks);
 
   return {
     paths,
@@ -247,7 +250,10 @@ async function collectStatus() {
       ["Goal skill", await exists(paths.skillFile)],
       ["CLI hook helper", await exists(paths.hookFile)],
       ["CLI settings JSON", Boolean(settings) && !settingsError],
+      ["CLI hooks enabled", Boolean(settings) && !cliHooksDisabled],
       ["All CLI hook entries", cliHookEventsPresent.length === CLI_HOOK_EVENTS.length],
+      ["No duplicate CLI goal hooks", Object.keys(duplicateCliGoalHooks).length === 0],
+      ["No stale CLI drift hooks", staleCliDriftHookEvents.length === 0],
       ["Instruction snippet", await instructionsSnippetInstalled(paths.instructionsFile)],
       ["VS Code Chat custom agent", await exists(paths.vscodeAgentFile)],
       ["VS Code Chat hook config", vscodeHookConfigInstalled(vscodeHookConfig)],
@@ -255,6 +261,9 @@ async function collectStatus() {
       ["VS Code MCP config", mcpServerInstalled(mcpConfig)],
     ],
     cliHookEventsPresent,
+    duplicateCliGoalHooks,
+    staleCliDriftHookEvents,
+    cliHooksDisabled,
     vscodeHookConfigInstalled: vscodeHookConfigInstalled(vscodeHookConfig),
     mcpServerConfigured: mcpServerInstalled(mcpConfig),
     installedPackageError,
@@ -290,9 +299,19 @@ function formatStatusReport(status) {
     ...status.checks.map(([label, ok]) => `[${ok ? "OK" : "Missing"}] ${label}`),
     "",
     `CLI hook entries: ${status.cliHookEventsPresent.length}/${CLI_HOOK_EVENTS.length}`,
+    `CLI hooks disabled: ${status.cliHooksDisabled ? "Yes" : "No"}`,
     `VS Code hook config: ${status.vscodeHookConfigInstalled ? "Installed" : "Missing"}`,
     `VS Code MCP server: ${status.mcpServerConfigured ? "Configured" : "Missing"}`,
   ];
+
+  const duplicateEvents = Object.entries(status.duplicateCliGoalHooks || {});
+  if (duplicateEvents.length > 0) {
+    lines.push("", "Duplicate CLI goal hooks:", ...duplicateEvents.map(([eventName, extraCount]) => `- ${eventName}: ${extraCount} extra goal hook${extraCount === 1 ? "" : "s"}`));
+  }
+
+  if (status.staleCliDriftHookEvents && status.staleCliDriftHookEvents.length > 0) {
+    lines.push("", "Stale CLI drift hooks:", ...status.staleCliDriftHookEvents.map((eventName) => `- ${eventName}`));
+  }
 
   if (status.settingsError) {
     lines.push("", `Settings error: ${status.settingsError}`);

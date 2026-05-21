@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.7
+
+- Normalizes Copilot CLI goal hook installs so `~`, `$HOME`, absolute, and wrapper-based `goal-context.sh` commands do not stack duplicate goal hooks.
+- Preserves composite user hooks that already include `goal-context.sh`, such as merge helpers that also inject system context.
+- Extends VS Code status checks to detect disabled CLI hooks, duplicate goal hooks, and stale drift hooks instead of reporting a misleading clean install.
+- Adds regression coverage for duplicate direct hooks, composite hook preservation, stale drift hook reporting, and flexible hook command detection.
+
 ## 1.1.6
 
 - Makes drift recovery non-deadlocking by default: critical drift now injects a recovery reminder while allowing the tool call, with hard denial left behind an explicit `GOAL_SYSTEM_HARD_DRIFT_BLOCK=1` opt-in.

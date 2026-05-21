@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.7
+
+- Recognizes existing Copilot CLI goal hooks written with `~`, `$HOME`, absolute paths, or wrapper commands.
+- Reports disabled CLI hooks, duplicate goal hook entries, and stale drift hooks in the status view.
+- Installs the updated runtime that avoids adding duplicate direct hooks when a composite hook already runs `goal-context.sh`.
+
 ## 1.1.6
 
 - Makes drift recovery non-deadlocking by default: critical drift now injects a recovery reminder while allowing the tool call.

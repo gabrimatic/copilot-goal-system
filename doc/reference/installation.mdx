@@ -89,7 +89,7 @@ Restart Copilot CLI:
 | `~/.copilot/settings.json` | Hook entries are merged into existing settings. |
 | `~/.copilot/copilot-instructions.md` | A short goal-system reminder is appended once. |
 
-The installer preserves existing settings. It appends missing goal hooks and leaves unrelated hooks alone. Empty JSON config files are initialized as empty objects; malformed non-empty JSON is refused so existing data is not overwritten.
+The installer preserves existing settings. It appends missing goal hooks, leaves unrelated hooks alone, and recognizes existing goal hooks written with `~`, `$HOME`, absolute paths, or wrapper commands. If a composite user hook already runs `goal-context.sh`, the installer keeps that hook and does not add a duplicate direct goal hook. Empty JSON config files are initialized as empty objects; malformed non-empty JSON is refused so existing data is not overwritten.
 
 ## Hook entries
 
@@ -150,6 +150,7 @@ For both adapters:
 Restart Copilot CLI after updating.
 
 Updates replace the installed runtime snapshot instead of overlaying files, so files removed from newer releases do not remain active in `~/.copilot/extensions/goal-system/`.
+Updates also clean up duplicate direct goal hook entries from older installs while preserving composite hooks that include user-managed context helpers.
 
 ## Marketplace publish
 
@@ -224,6 +225,10 @@ Run `goal_system_status` inside Copilot before continuing. If no state exists, s
 ### Drift warnings keep repeating
 
 Call `goal_system_update` with real progress, inspection evidence, verification results, remaining work, or blockers. If the goal tools are missing, the default guard should still allow recovery tool calls; rerun the installer to remove stale CLI `preToolUse` or `postToolUse` goal hooks from older installs.
+
+### Status reports duplicate CLI goal hooks
+
+Run the installer again. It normalizes direct `goal-context.sh` entries, keeps a composite hook if one already carries the goal context, and leaves unrelated hooks in place. Restart Copilot CLI afterward because hook configuration changes load when the CLI starts.
 
 ### VS Code Chat tools do not appear
 

@@ -130,6 +130,85 @@ test("installer removes stale CLI preToolUse goal-system drift hooks", async () 
   await rm(home, { recursive: true, force: true });
 });
 
+test("installer normalizes duplicate direct goal hooks without removing composite user hooks", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-duplicate-hooks-"));
+  const copilotDir = path.join(home, ".copilot");
+  await execFileAsync("mkdir", ["-p", copilotDir]);
+  await writeFile(
+    path.join(copilotDir, "settings.json"),
+    JSON.stringify(
+      {
+        hooks: {
+          sessionStart: [
+            {
+              type: "command",
+              bash: "~/.copilot/hooks/merge-hook-context.sh ~/.copilot/hooks/system-info.sh ~/.copilot/hooks/goal-context.sh",
+              timeoutSec: 15,
+            },
+            {
+              type: "command",
+              bash: "$HOME/.copilot/hooks/goal-context.sh",
+              timeoutSec: 5,
+            },
+          ],
+          agentStop: [
+            {
+              type: "command",
+              bash: "~/.copilot/hooks/goal-context.sh",
+              timeoutSec: 5,
+            },
+            {
+              type: "command",
+              bash: "$HOME/.copilot/hooks/goal-context.sh",
+              timeoutSec: 5,
+            },
+          ],
+          preToolUse: [
+            {
+              type: "command",
+              bash: "~/.copilot/hooks/safety-guard.sh",
+              timeoutSec: 5,
+            },
+          ],
+        },
+      },
+      null,
+      2
+    )
+  );
+
+  await execFileAsync(process.execPath, [installer], {
+    cwd: root,
+    env: { ...process.env, HOME: home },
+    maxBuffer: 1024 * 1024 * 8,
+  });
+
+  const settings = JSON.parse(await readFile(path.join(copilotDir, "settings.json"), "utf8"));
+  assert.deepEqual(settings.hooks.sessionStart, [
+    {
+      type: "command",
+      bash: "~/.copilot/hooks/merge-hook-context.sh ~/.copilot/hooks/system-info.sh ~/.copilot/hooks/goal-context.sh",
+      timeoutSec: 15,
+    },
+  ]);
+  assert.deepEqual(settings.hooks.agentStop, [
+    {
+      type: "command",
+      bash: "$HOME/.copilot/hooks/goal-context.sh",
+      timeoutSec: 5,
+    },
+  ]);
+  assert.deepEqual(settings.hooks.preToolUse, [
+    {
+      type: "command",
+      bash: "~/.copilot/hooks/safety-guard.sh",
+      timeoutSec: 5,
+    },
+  ]);
+
+  await rm(home, { recursive: true, force: true });
+});
+
 test("installer replaces stale runtime files and avoids unchanged settings backups", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-stale-runtime-"));
   const copilotDir = path.join(home, ".copilot");

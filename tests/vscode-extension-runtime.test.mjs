@@ -7,6 +7,12 @@ const {
   runtimeUpdatePromptKey,
   runtimeVersionState,
 } = require("../vscode-extension/lib/runtime-version.cjs");
+const {
+  countDuplicateGoalHooks,
+  findStaleDriftHookEvents,
+  hookInstalled,
+  isGoalContextHook,
+} = require("../vscode-extension/lib/install-status.cjs");
 
 test("runtimeVersionState requires install when runtime package is missing", () => {
   assert.deepEqual(
@@ -63,4 +69,57 @@ test("runtimeUpdatePromptKey is stable and scoped to home plus bundled version",
   assert.notEqual(first, otherHome);
   assert.notEqual(first, otherVersion);
   assert.match(first, /^runtimeUpdatePrompt\.lastOffered\.[a-f0-9]{40}$/);
+});
+
+test("install status recognizes direct and composite goal hook commands", () => {
+  assert.equal(isGoalContextHook({ type: "command", bash: "$HOME/.copilot/hooks/goal-context.sh" }), true);
+  assert.equal(isGoalContextHook({ type: "command", bash: "~/.copilot/hooks/goal-context.sh" }), true);
+  assert.equal(
+    isGoalContextHook({
+      type: "command",
+      bash: "~/.copilot/hooks/merge-hook-context.sh ~/.copilot/hooks/system-info.sh ~/.copilot/hooks/goal-context.sh",
+    }),
+    true
+  );
+  assert.equal(isGoalContextHook({ type: "command", bash: "~/.copilot/hooks/not-goal-context.sh" }), false);
+});
+
+test("install status reports duplicate goal hooks and stale drift hooks", () => {
+  const settings = {
+    hooks: {
+      sessionStart: [
+        {
+          type: "command",
+          bash: "~/.copilot/hooks/merge-hook-context.sh ~/.copilot/hooks/system-info.sh ~/.copilot/hooks/goal-context.sh",
+        },
+        {
+          type: "command",
+          bash: "$HOME/.copilot/hooks/goal-context.sh",
+        },
+      ],
+      agentStop: [
+        {
+          type: "command",
+          bash: "~/.copilot/hooks/goal-context.sh",
+        },
+        {
+          type: "command",
+          bash: "$HOME/.copilot/hooks/goal-context.sh",
+        },
+      ],
+      preToolUse: [
+        {
+          type: "command",
+          bash: "$HOME/.copilot/hooks/goal-context.sh",
+        },
+      ],
+    },
+  };
+
+  assert.equal(hookInstalled(settings, "sessionStart"), true);
+  assert.deepEqual(countDuplicateGoalHooks(settings, ["sessionStart", "agentStop"]), {
+    sessionStart: 1,
+    agentStop: 1,
+  });
+  assert.deepEqual(findStaleDriftHookEvents(settings), ["preToolUse"]);
 });

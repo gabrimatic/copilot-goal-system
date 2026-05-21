@@ -2,7 +2,7 @@
   "name": "copilot-goal-system",
   "displayName": "Copilot Goal System",
   "description": "Install persisted goal mode for GitHub Copilot CLI and VS Code Copilot Chat.",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "publisher": "gabrimatic",
   "author": {
     "name": "Soroush Yousefpour",
@@ -217,7 +217,7 @@
   "scripts": {
     "vscode:prepublish": "node scripts/prepare-bundle.mjs",
     "prepare:bundle": "node scripts/prepare-bundle.mjs",
-    "check": "node --check extension.cjs && node --check lib/runtime-version.cjs && node --check scripts/prepare-bundle.mjs && node --check scripts/package.mjs",
+    "check": "node --check extension.cjs && node --check lib/runtime-version.cjs && node --check lib/install-status.cjs && node --check scripts/prepare-bundle.mjs && node --check scripts/package.mjs",
     "package": "node scripts/package.mjs",
     "publish": "vsce publish"
   },
