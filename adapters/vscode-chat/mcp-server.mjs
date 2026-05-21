@@ -63,7 +63,7 @@ const goalPatchShape = {
 };
 
 const contextShape = {
-  sessionId: z.string().min(1).describe("The VS Code Chat sessionId from the goal hook context."),
+  sessionId: z.string().min(1).describe("The Copilot sessionId from the goal hook context."),
   cwd: z.string().min(1).describe("The workspace cwd from the goal hook context."),
 };
 
@@ -90,7 +90,7 @@ async function loadGoal(args) {
 async function statusHandler(args) {
   const { record } = await loadGoal(args);
   if (!record || !isOpenGoal(record.goal)) {
-    return toolResult("No persisted active goal is stored for this VS Code Chat session/workspace.");
+    return toolResult("No persisted active goal is stored for this Copilot session/workspace.");
   }
   return toolResult(formatGoalSummary(record.goal, { includeHistory: true }));
 }
@@ -99,17 +99,17 @@ async function openHandler(args) {
   const { sessionId, cwd, record } = await loadGoal(args);
   if (record && isOpenGoal(record.goal) && args.replaceExisting !== true) {
     return toolResult(
-      "An active persisted goal already exists for this VS Code Chat session/workspace. Use goal_system_update to continue it, or call goal_system_open with replaceExisting: true only when the prompt clearly replaces the current goal.",
+      "An active persisted goal already exists for this Copilot session/workspace. Use goal_system_update to continue it, or call goal_system_open with replaceExisting: true only when the prompt clearly replaces the current goal.",
       true
     );
   }
 
   const goal = createGoalRecord(args, sessionId, cwd, {
     sourcePrompt: args.sourcePrompt,
-    historyNote: args.historyNote || "VS Code Chat goal opened or replaced",
+    historyNote: args.historyNote || "Copilot goal opened or replaced",
   });
   const persisted = await store.persistGoalRecord(sessionId, cwd, goal);
-  store.auditLog("vscode_goal_open", {
+  store.auditLog("mcp_goal_open", {
     sid: sessionId,
     id: persisted.id,
     replaced: Boolean(record && isOpenGoal(record.goal)),
@@ -137,9 +137,9 @@ async function updateHandler(args) {
     );
   }
 
-  const nextGoal = mergeGoal(record.goal, args, "update", args.historyNote || "VS Code Chat goal state updated");
+  const nextGoal = mergeGoal(record.goal, args, "update", args.historyNote || "Copilot goal state updated");
   const persisted = await store.persistGoalRecord(sessionId, cwd, nextGoal);
-  store.auditLog("vscode_goal_update", { sid: sessionId, id: persisted.id, fields: changedFields });
+  store.auditLog("mcp_goal_update", { sid: sessionId, id: persisted.id, fields: changedFields });
   return toolResult(formatGoalSummary(persisted));
 }
 
@@ -155,19 +155,19 @@ async function closeHandler(args) {
     blockers: args.completionStatus === "complete" && !Array.isArray(args.blockers) ? [] : args.blockers,
     remaining: args.completionStatus === "complete" && !Array.isArray(args.remaining) ? [] : args.remaining,
   };
-  const nextGoal = mergeGoal(record.goal, patch, "close", args.summary || `VS Code Chat goal marked ${args.completionStatus}`);
+  const nextGoal = mergeGoal(record.goal, patch, "close", args.summary || `Copilot goal marked ${args.completionStatus}`);
   nextGoal.closedAt = new Date().toISOString();
 
   if (args.completionStatus === "complete") {
     const failures = validateGoalCompletion(nextGoal);
     if (failures.length) {
-      store.auditLog("vscode_close_refused", { sid: sessionId, id: record.goal.id, reasons: failures });
+      store.auditLog("mcp_close_refused", { sid: sessionId, id: record.goal.id, reasons: failures });
       return toolResult(`Refusing to mark the goal complete. Missing or conflicting completion evidence:\n- ${failures.join("\n- ")}`, true);
     }
   }
 
   const persisted = await store.persistGoalRecord(sessionId, cwd, nextGoal);
-  store.auditLog("vscode_goal_close", { sid: sessionId, id: persisted.id, status: args.completionStatus });
+  store.auditLog("mcp_goal_close", { sid: sessionId, id: persisted.id, status: args.completionStatus });
   return toolResult(formatGoalSummary(persisted, { includeHistory: false }));
 }
 
@@ -178,14 +178,14 @@ const server = new McpServer({
 
 server.tool(
   "goal_system_status",
-  "Read the persisted active goal state for the current VS Code Chat session/workspace. Requires the sessionId and cwd injected by the goal hook.",
+  "Read the persisted active goal state for the current Copilot session/workspace. Requires the sessionId and cwd injected by goal hook context.",
   contextShape,
   statusHandler
 );
 
 server.tool(
   "goal_system_open",
-  "Create or replace the persisted active goal for the current VS Code Chat session/workspace.",
+  "Create or replace the persisted active goal for the current Copilot session/workspace.",
   {
     ...contextShape,
     ...goalPatchShape,

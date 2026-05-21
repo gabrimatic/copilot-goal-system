@@ -19,6 +19,7 @@ The Marketplace **Install** button installs the VS Code extension. The command i
 - `~/.copilot/hooks/goal-system-vscode.json`
 - `~/.copilot/agents/goal-system.agent.md`
 - hook entries in `~/.copilot/settings.json`
+- a `goalSystem` MCP fallback server in `~/.copilot/mcp-config.json`
 - a `goalSystem` MCP server in the VS Code profile `mcp.json`
 - a short reminder in `~/.copilot/copilot-instructions.md`
 
@@ -53,8 +54,11 @@ For CLI mode, restart Copilot CLI and run:
 
 ```text
 /skills reload
+/mcp show
 /env
 ```
+
+From the shell, `copilot mcp get goalSystem --json` should also show the configured server.
 
 For VS Code Chat, reload VS Code or run `MCP: Reset Cached Tools`, then select the `Goal System` custom agent.
 

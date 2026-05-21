@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.8
+
+- Adds a standard Copilot CLI MCP fallback server at `~/.copilot/mcp-config.json` so `goal_system_*` tools can be available through normal MCP discovery as well as the SDK extension path.
+- Adds `npm run doctor` for local host diagnostics across Copilot CLI, installed runtime files, lifecycle hooks, stale drift hooks, duplicate hook entries, CLI MCP loading, exact configured MCP self-tests, and VS Code MCP config.
+- Injects `sessionId` and `cwd` into CLI hook context and creates a persisted draft goal from explicit CLI `/goal` prompts so MCP fallback tools can bootstrap a new goal when direct SDK tools are hidden.
+- Recognizes Copilot CLI's MCP-prefixed tool names such as `goalSystem-goal_system_update` as goal tools, so recovery updates do not count as drift.
+- Preflights target JSON files before copying runtime files and improves VS Code status wording for partial CLI-only or VS Code-only installs.
+
 ## 1.1.7
 
 - Normalizes Copilot CLI goal hook installs so `~`, `$HOME`, absolute, and wrapper-based `goal-context.sh` commands do not stack duplicate goal hooks.

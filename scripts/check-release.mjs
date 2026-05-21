@@ -41,6 +41,8 @@ const rootLock = await readJson("package-lock.json");
 const vscodeLock = await readJson("vscode-extension/package-lock.json");
 const rootChangelog = await readText("CHANGELOG.md");
 const vscodeChangelog = await readText("vscode-extension/CHANGELOG.md");
+const rootInstallStatus = await readText("lib/install-status.cjs");
+const vscodeInstallStatus = await readText("vscode-extension/lib/install-status.cjs");
 
 if (rootPackage.version !== vscodePackage.version) {
   fail(`Version mismatch: package.json is ${rootPackage.version}, vscode-extension/package.json is ${vscodePackage.version}.`);
@@ -70,3 +72,7 @@ checkLockVersion(rootLock, "package-lock.json", rootPackage.version);
 checkLockVersion(vscodeLock, "vscode-extension/package-lock.json", vscodePackage.version);
 checkChangelog(rootChangelog, "CHANGELOG.md", rootPackage.version);
 checkChangelog(vscodeChangelog, "vscode-extension/CHANGELOG.md", vscodePackage.version);
+
+if (rootInstallStatus !== vscodeInstallStatus) {
+  fail("lib/install-status.cjs and vscode-extension/lib/install-status.cjs must stay identical.");
+}

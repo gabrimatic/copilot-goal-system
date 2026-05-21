@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -90,6 +90,67 @@ test("subagentStart injects a main-session-only boundary even when camelCase pay
   await rm(home, { recursive: true, force: true });
 });
 
+test("sessionStart without an active goal injects MCP-ready session context", async () => {
+  const home = path.join(tmpdir(), `goal-hook-${process.pid}-empty-session`);
+  const cwd = path.join(home, "project");
+  await mkdir(cwd, { recursive: true });
+
+  const result = await runHook(
+    {
+      sessionId: "session-empty",
+      timestamp: Date.now(),
+      cwd,
+      source: "startup",
+    },
+    { HOME: home }
+  );
+
+  const parsed = JSON.parse(result.stdout);
+  assert.match(parsed.additionalContext, /Goal System for Copilot CLI is available/);
+  assert.match(parsed.additionalContext, /Session ID: session-empty/);
+  assert.match(parsed.additionalContext, /CWD: /);
+  assert.match(parsed.additionalContext, /goalSystem/);
+  assert.match(parsed.additionalContext, /goal_system_open/);
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("userPromptSubmitted creates a CLI draft goal on explicit goal activation", async () => {
+  const home = path.join(tmpdir(), `goal-hook-${process.pid}-cli-activate`);
+  const cwd = path.join(home, "project");
+  await mkdir(cwd, { recursive: true });
+
+  const result = await runHook(
+    {
+      sessionId: "session-cli-activate",
+      timestamp: Date.now(),
+      cwd,
+      prompt: "/goal fix the release flow end to end",
+    },
+    { HOME: home }
+  );
+
+  const parsed = JSON.parse(result.stdout);
+  assert.match(parsed.additionalContext, /persisted draft goal was created/i);
+  assert.match(parsed.additionalContext, /Session ID: session-cli-activate/);
+  assert.match(parsed.additionalContext, /goalSystem/);
+  assert.match(parsed.additionalContext, /goal_system_update/);
+
+  const goal = JSON.parse(await readFile(path.join(home, ".copilot", "session-state", "goal-system", "by-session", "session-cli-activate.json"), "utf8"));
+  assert.equal(goal.objective, "fix the release flow end to end");
+  assert.equal(goal.completionStatus, "draft");
+  assert.equal(goal.sessionId, "session-cli-activate");
+  assert.equal(goal.cwd, await realpath(cwd));
+  assert.match(goal.remaining.join("\n"), /Inspect the real environment/);
+
+  const stateDir = await stat(path.join(home, ".copilot", "session-state", "goal-system", "by-session"));
+  const goalFile = await stat(path.join(home, ".copilot", "session-state", "goal-system", "by-session", "session-cli-activate.json"));
+  assert.equal(stateDir.mode & 0o777, 0o700);
+  assert.equal(goalFile.mode & 0o777, 0o600);
+
+  await rm(home, { recursive: true, force: true });
+});
+
 test("agentStop blocks a premature stop while an active goal is still open", async () => {
   const home = path.join(tmpdir(), `goal-hook-${process.pid}-agentstop`);
   const cwd = path.join(home, "project");
@@ -110,7 +171,11 @@ test("agentStop blocks a premature stop while an active goal is still open", asy
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.decision, "block");
   assert.match(parsed.reason, /STOP BLOCKED|Active persisted goal is still open/);
+  assert.match(parsed.reason, /Session ID: session-main/);
+  assert.match(parsed.reason, /CWD: /);
   assert.match(parsed.reason, /hard continuation directive/);
+  assert.match(parsed.reason, /goalSystem/);
+  assert.match(parsed.reason, /MCP equivalents/);
   assert.match(parsed.reason, /goal_system_status/);
   assert.match(parsed.reason, /goal_system_update/);
   assert.match(parsed.reason, /goal_system_close only when/);
@@ -257,6 +322,10 @@ test("preCompact writes a compact snapshot side effect for context recovery", as
   const snapshot = await readFile(path.join(stateRoot, "compact", "session-compact.txt"), "utf8");
   assert.match(snapshot, /Goal ID: goal-1/);
   assert.match(snapshot, /Remaining: run verification/);
+  const compactDir = await stat(path.join(stateRoot, "compact"));
+  const snapshotFile = await stat(path.join(stateRoot, "compact", "session-compact.txt"));
+  assert.equal(compactDir.mode & 0o777, 0o700);
+  assert.equal(snapshotFile.mode & 0o777, 0o600);
 
   await rm(home, { recursive: true, force: true });
 });

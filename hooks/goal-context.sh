@@ -108,6 +108,20 @@ hash_cwd() {
   fi
 }
 
+sha256_text() {
+  if command -v shasum >/dev/null 2>&1; then
+    printf '%s' "$1" | shasum -a 256 | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    printf '%s' "$1" | sha256sum | awk '{print $1}'
+  else
+    hash_cwd "$1"
+  fi
+}
+
+now_iso() {
+  date -u +"%Y-%m-%dT%H:%M:%S.000Z"
+}
+
 normalized_cwd=$(normalize_path "$cwd")
 safe_sid=$(safe_session_id "$session_id")
 [[ -z "$safe_sid" ]] && exit 0
@@ -154,7 +168,154 @@ case "$hook_event" in
     ;;
 esac
 
-[[ -z "$goal_path" ]] && exit 0
+prompt_text=$(jq_get '.prompt // .message // .userPrompt // .user_prompt')
+
+prompt_matches() {
+  local pattern="$1"
+  [[ -n "$prompt_text" ]] || return 1
+  jq -n -e --arg prompt "$prompt_text" --arg pattern "$pattern" '$prompt | test($pattern; "i")' >/dev/null 2>&1
+}
+
+trim_prompt_objective() {
+  jq -n -r --arg prompt "$prompt_text" '
+    ($prompt
+      | gsub("\u0000"; "")
+      | sub("^\\s+"; "")
+      | sub("\\s+$"; "")
+      | sub("^/goal\\b[:\\s-]*"; ""; "i")
+      | sub("^new goal\\b[:\\s-]*"; ""; "i")
+      | sub("^goal mode\\b[:\\s-]*"; ""; "i")
+      | sub("^turn this into a goal\\b[:\\s-]*"; ""; "i")) as $objective
+    | if ($objective | length) == 0 then "Goal mode task"
+      elif ($objective | length) > 600 then ($objective[0:599])
+      else $objective end
+  '
+}
+
+empty_session_context() {
+  cat <<EOF_EMPTY
+Goal System for Copilot CLI is available for this main session.
+Session ID: $safe_sid
+CWD: $normalized_cwd
+Goal tools may appear either as direct goal_system_* tools or as MCP tools from the goalSystem server. If using MCP tools, pass the Session ID and CWD above.
+When the prompt explicitly starts goal mode, call goal_system_open with these exact values. For active goals, use goal_system_status before continuing or closing. Subagents must not use goal tools.
+EOF_EMPTY
+}
+
+write_goal_json() {
+  local destination="$1"
+  local payload="$2"
+  mkdir -p "$(dirname "$destination")"
+  chmod 700 "$(dirname "$destination")" 2>/dev/null || true
+  local temp_path="${destination}.tmp-$$"
+  printf '%s\n' "$payload" > "$temp_path"
+  chmod 600 "$temp_path" 2>/dev/null || true
+  mv "$temp_path" "$destination"
+  chmod 600 "$destination" 2>/dev/null || true
+}
+
+write_private_text() {
+  local destination="$1"
+  local payload="$2"
+  mkdir -p "$(dirname "$destination")"
+  chmod 700 "$(dirname "$destination")" 2>/dev/null || true
+  local temp_path="${destination}.tmp-$$"
+  printf '%s\n' "$payload" > "$temp_path"
+  chmod 600 "$temp_path" 2>/dev/null || true
+  mv "$temp_path" "$destination"
+  chmod 600 "$destination" 2>/dev/null || true
+}
+
+create_cli_draft_goal() {
+  local objective="$1"
+  local timestamp="$2"
+  local prompt_hash="$3"
+  local goal_id
+  if command -v uuidgen >/dev/null 2>&1; then
+    goal_id="goal-$(uuidgen | tr '[:upper:]' '[:lower:]')"
+  else
+    goal_id="goal-$(sha256_text "${safe_sid}:${normalized_cwd}:${timestamp}" | cut -c1-32)"
+  fi
+
+  jq -n \
+    --arg id "$goal_id" \
+    --arg sessionId "$safe_sid" \
+    --arg cwd "$normalized_cwd" \
+    --arg objective "$objective" \
+    --arg now "$timestamp" \
+    --arg promptHash "$prompt_hash" \
+    '{
+      version: 3,
+      id: $id,
+      sessionId: $sessionId,
+      cwd: $cwd,
+      objective: $objective,
+      requirements: ["Inspect the real environment before treating any unverified detail as fact."],
+      scope: [],
+      mustNotRegress: [],
+      constraints: [],
+      currentEnvironment: [],
+      requiredTools: [],
+      validationProof: [],
+      verificationResults: [],
+      requirementCoverage: [],
+      inspectionEvidence: [],
+      discoveredIssues: [],
+      resolvedIssues: [],
+      issueResolutions: [],
+      doneSoFar: ["Draft goal record created from the explicit goal-mode prompt."],
+      remaining: [
+        "Inspect the real environment and replace draft fields with verified facts.",
+        "Execute the goal, record discovered issues, fix them, verify with evidence, and close only after audit."
+      ],
+      blockers: [],
+      completionAudit: [],
+      completionStatus: "draft",
+      sourcePromptHash: $promptHash,
+      sourcePromptPreview: $objective,
+      createdAt: $now,
+      updatedAt: $now,
+      history: [{ at: $now, type: "open", note: "CLI draft goal created automatically from explicit activation prompt" }]
+    }'
+}
+
+if [[ -z "$goal_path" ]]; then
+  case "$hook_event" in
+    sessionStart)
+      jq -n --arg additionalContext "$(empty_session_context)" '{additionalContext: $additionalContext}'
+      exit 0
+      ;;
+    userPromptSubmitted)
+      continue_pattern='(^|[[:space:]])(continue the active goal|continue goal|resume goal|what remains|keep going|go on|continue from goal state)($|[[:space:]])'
+      activation_pattern='(^|[[:space:]\(\["`])/goal\b|\b(new goal|goal mode|turn this into a goal|keep working until this is done|make sure everything is fixed|no escape|do it fully|polish everything|deeply inspect and fix|verify and prove it|reach perfection|nothing left behind)\b'
+      if prompt_matches "$activation_pattern" && ! prompt_matches "$continue_pattern"; then
+        objective=$(trim_prompt_objective)
+        timestamp=$(now_iso)
+        prompt_hash=$(sha256_text "$prompt_text")
+        draft_json=$(create_cli_draft_goal "$objective" "$timestamp" "$prompt_hash")
+        write_goal_json "$session_goal_path" "$draft_json"
+        write_goal_json "$workspace_goal_path" "$draft_json"
+        write_goal_json "$cwd_goal_path" "$draft_json"
+        activation_context=$(cat <<EOF_ACTIVATION
+A persisted draft goal was created for this Copilot CLI main session.
+Goal ID: $(printf '%s' "$draft_json" | jq -r '.id')
+Session ID: $safe_sid
+CWD: $normalized_cwd
+Objective: $objective
+Goal tools may appear either as direct goal_system_* tools or as MCP tools from the goalSystem server. If direct tools are unavailable, use the goalSystem MCP equivalents with the exact Session ID and CWD above.
+Inspect the real environment before treating any detail as fact, then call goal_system_update with verified facts before doing substantive work.
+Do not answer with only an acknowledgment. Continue the real task and close only after proof.
+EOF_ACTIVATION
+)
+        jq -n --arg additionalContext "$activation_context" '{additionalContext: $additionalContext}'
+        exit 0
+      fi
+      jq -n --arg additionalContext "$(empty_session_context)" '{additionalContext: $additionalContext}'
+      exit 0
+      ;;
+  esac
+  exit 0
+fi
 
 join_list() {
   local key="$1"
@@ -177,6 +338,8 @@ updated_at=$(jq -r '.updatedAt // .createdAt // "unknown"' "$goal_path")
 context=$(cat <<EOF_CONTEXT
 Open persisted main-session goal for this working directory.
 Goal ID: $goal_id
+Session ID: $safe_sid
+CWD: $normalized_cwd
 Status: $status
 Objective: $objective
 Done so far: $done_so_far
@@ -184,27 +347,29 @@ Remaining: $remaining
 Blockers: $blockers
 Validation/proof: $validation
 Updated at: $updated_at
-Use goal_system_status for authoritative state before continuing or closing. Do not mark complete without real inspection evidence, resolved issues, verification results, and completion audit.
+Goal tools may appear either as direct SDK tools or as MCP tools from the goalSystem server. If using MCP tools, pass the Session ID and CWD above. Use goal_system_status for authoritative state before continuing or closing. Do not mark complete without real inspection evidence, resolved issues, verification results, and completion audit.
 EOF_CONTEXT
 )
 
 case "$hook_event" in
   preCompact)
     compact_dir="$state_root/compact"
-    mkdir -p "$compact_dir"
-    printf '%s\n' "$context" > "$compact_dir/${safe_sid}.txt" || true
+    write_private_text "$compact_dir/${safe_sid}.txt" "$context" || true
     exit 0
     ;;
   agentStop)
     reason=$(cat <<EOF_REASON
 Active persisted goal is still open for this main session.
 Goal ID: $goal_id
+Session ID: $safe_sid
+CWD: $normalized_cwd
 Objective: $objective
 Status: $status
 Remaining: $remaining
 Blockers: $blockers
 
 This is a hard continuation directive. Do not produce a final answer, do not ask for permission to continue, and do not bypass the guard by copying unresolved issue text into resolvedIssues.
+Goal tools may appear either as direct goal_system_* tools or as MCP tools from the goalSystem server. If direct tools are unavailable, use the goalSystem MCP equivalents with the exact Session ID and CWD above.
 Your next actions must be:
 1. Call goal_system_status to reload authoritative state.
 2. Continue the next concrete remaining item. If remaining is empty but the goal is open, inspect the real state and update remaining or close with evidence.

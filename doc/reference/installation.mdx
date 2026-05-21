@@ -69,12 +69,17 @@ Install only the VS Code Chat adapter:
 ./install.sh --target vscode-chat
 ```
 
-Restart Copilot CLI:
+After installing `cli` or `all`, restart Copilot CLI:
 
 ```text
 /skills reload
+/mcp show
 /env
 ```
+
+Confirm `goalSystem` appears in the MCP server list. From the shell, you can also run `copilot mcp get goalSystem --json`.
+
+After installing only `vscode-chat`, reload VS Code or run `MCP: Reset Cached Tools`, then confirm `goalSystem` appears under `MCP: List Servers`.
 
 ## What gets installed
 
@@ -83,6 +88,7 @@ Restart Copilot CLI:
 | `~/.copilot/extensions/goal-system/` | Extension package, tests, docs, hook config, and dependencies. |
 | `~/.copilot/skills/goal/SKILL.md` | Goal-mode skill used by Copilot. |
 | `~/.copilot/hooks/goal-context.sh` | CLI lifecycle hook helper. |
+| `~/.copilot/mcp-config.json` | `goalSystem` MCP fallback server for Copilot CLI goal tools. |
 | `~/.copilot/hooks/goal-system-vscode.json` | VS Code Chat lifecycle hook config. |
 | `~/.copilot/agents/goal-system.agent.md` | VS Code Chat custom agent. |
 | VS Code profile `mcp.json` | `goalSystem` stdio MCP server config. |
@@ -123,6 +129,14 @@ Stop
 
 `UserPromptSubmit` is required for VS Code Chat to persist a draft goal immediately when a prompt starts `/goal`, inject active-goal context on each prompt, and load one unambiguous same-directory goal on explicit continuation.
 
+The CLI install also adds this MCP server:
+
+```text
+goalSystem
+```
+
+This is a compatibility fallback for standard Copilot CLI sessions. Goal tools may appear as direct SDK tools or as MCP tools from the `goalSystem` server. In Copilot CLI, MCP tools may be prefixed by the server name, for example `goalSystem-goal_system_update`. Hook context includes the current `sessionId` and `cwd` so MCP tool calls can target the correct persisted goal.
+
 ## Update
 
 From VS Code, update the extension through the Marketplace. The extension checks whether the local runtime in `~/.copilot/extensions/goal-system/` is older than the bundled version and prompts you to update stale local files. You can also run:
@@ -141,13 +155,29 @@ npm run verify
 ./install.sh
 ```
 
+Run a local host diagnostic:
+
+```bash
+npm run doctor -- --target cli
+```
+
 For both adapters:
 
 ```bash
 ./install.sh --target all
+npm run doctor -- --target all
 ```
 
 Restart Copilot CLI after updating.
+
+After restarting Copilot CLI, run:
+
+```text
+/mcp show
+/env
+```
+
+Confirm `goalSystem` appears in the MCP server list and the goal skill is loaded.
 
 Updates replace the installed runtime snapshot instead of overlaying files, so files removed from newer releases do not remain active in `~/.copilot/extensions/goal-system/`.
 Updates also clean up duplicate direct goal hook entries from older installs while preserving composite hooks that include user-managed context helpers.
@@ -198,6 +228,7 @@ Also remove the marked snippet in `~/.copilot/copilot-instructions.md`:
 ```
 
 Then remove the `goalSystem` entry from the VS Code profile `mcp.json`.
+Also remove the `goalSystem` entry from `~/.copilot/mcp-config.json`.
 
 ## Troubleshooting
 
@@ -225,6 +256,22 @@ Run `goal_system_status` inside Copilot before continuing. If no state exists, s
 ### Drift warnings keep repeating
 
 Call `goal_system_update` with real progress, inspection evidence, verification results, remaining work, or blockers. If the goal tools are missing, the default guard should still allow recovery tool calls; rerun the installer to remove stale CLI `preToolUse` or `postToolUse` goal hooks from older installs.
+
+If direct goal tools are missing, check whether MCP fallback tools are available:
+
+```text
+/mcp show
+/env
+```
+
+From the shell, run:
+
+```bash
+copilot mcp list
+copilot mcp get goalSystem --json
+```
+
+If `goalSystem` is missing, rerun the installer and restart Copilot CLI. If `goalSystem` appears but tools are still absent, restart Copilot CLI, run `npm run doctor -- --target cli`, and check whether the doctor MCP self-test reports a local server failure.
 
 ### Status reports duplicate CLI goal hooks
 

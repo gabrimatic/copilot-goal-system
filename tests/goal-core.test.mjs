@@ -475,6 +475,10 @@ test("compact snapshots summarize large queues without mutating authoritative st
 test("strict drift enforcement blocks non-goal tools only when recovery is available", () => {
   assert.equal(isGoalSystemToolName("goal_system_update"), true);
   assert.equal(isGoalSystemToolName("mcp_goalSystem_goal_system_update"), true);
+  assert.equal(isGoalSystemToolName("goalSystem-goal_system_status"), true);
+  assert.equal(isGoalSystemToolName("goalSystem-goal_system_update"), true);
+  assert.equal(isGoalSystemToolName("goalSystem-goal_system_close"), true);
+  assert.equal(isGoalSystemToolName("goalSystem(goal_system_update)"), true);
   assert.equal(isGoalSystemToolName("bash"), false);
 
   assert.equal(
@@ -491,6 +495,10 @@ test("strict drift enforcement blocks non-goal tools only when recovery is avail
   );
   assert.equal(
     shouldEnforceDrift({ hasActiveGoal: true, toolName: "goal_system_update", driftCount: 99, threshold: 5, isSubagent: false }),
+    false
+  );
+  assert.equal(
+    shouldEnforceDrift({ hasActiveGoal: true, toolName: "goalSystem-goal_system_update", driftCount: 99, threshold: 5, isSubagent: false }),
     false
   );
   assert.equal(

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.8
+
+- Installs a Copilot CLI MCP fallback server so goal tools can be discovered through normal MCP configuration.
+- Adds local doctor diagnostics for runtime files, CLI hooks, CLI MCP loading, exact configured MCP self-tests, VS Code MCP, duplicate hooks, and stale drift hooks.
+- Includes `sessionId` and `cwd` in CLI hook context and creates a persisted CLI draft goal from explicit `/goal` prompts so MCP tools have the arguments they need.
+- Recognizes Copilot CLI's MCP-prefixed goal tool names and reports partial CLI-only or VS Code-only installs more clearly.
+
 ## 1.1.7
 
 - Recognizes existing Copilot CLI goal hooks written with `~`, `$HOME`, absolute paths, or wrapper commands.

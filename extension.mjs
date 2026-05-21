@@ -29,10 +29,6 @@ import {
 
 const HISTORY_SKIP_TOOLS = new Set([
   "report_intent",
-  "goal_system_status",
-  "goal_system_open",
-  "goal_system_update",
-  "goal_system_close",
 ]);
 
 const FLUSH_INTERVAL_MS = 4000;
@@ -389,7 +385,7 @@ const session = await joinSession({
 
     onPostToolUse: async (input, invocation) => {
       const toolName = normalizeText(input.toolName, 120);
-      if (HISTORY_SKIP_TOOLS.has(toolName)) return;
+      if (HISTORY_SKIP_TOOLS.has(toolName) || isGoalSystemToolName(toolName)) return;
       const sessionId = safeSessionId(invocation.sessionId);
       const sessionCwd = setSessionCwd(invocation.sessionId, input.cwd);
       if (!sessionId) return;

@@ -14,6 +14,7 @@ const skillDir = path.join(copilotRoot, "skills", "goal");
 const hookDir = path.join(copilotRoot, "hooks");
 const agentDir = path.join(copilotRoot, "agents");
 const settingsPath = path.join(copilotRoot, "settings.json");
+const cliMcpConfigPath = path.join(copilotRoot, "mcp-config.json");
 const instructionsPath = path.join(copilotRoot, "copilot-instructions.md");
 const vscodeHookConfigPath = path.join(hookDir, "goal-system-vscode.json");
 const vscodeAgentPath = path.join(agentDir, "goal-system.agent.md");
@@ -82,7 +83,7 @@ async function readJsonIfExists(filePath) {
   } catch (error) {
     if (error.code === "ENOENT") return {};
     if (error instanceof SyntaxError) {
-      throw new Error(`${filePath} is not valid JSON. Fix it before installing; no settings were changed.`);
+      throw new Error(`${filePath} is not valid JSON. Fix it before installing; that config file was not changed.`);
     }
     throw error;
   }
@@ -219,6 +220,25 @@ async function mergeSettingsHooks() {
   await writeTextAtomic(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
 }
 
+async function installCliMcpServer() {
+  const mcpConfig = await readJsonIfExists(cliMcpConfigPath);
+  mcpConfig.mcpServers =
+    mcpConfig.mcpServers && typeof mcpConfig.mcpServers === "object" && !Array.isArray(mcpConfig.mcpServers)
+      ? mcpConfig.mcpServers
+      : {};
+  mcpConfig.mcpServers.goalSystem = {
+    type: "local",
+    command: process.execPath,
+    args: [path.join(extensionDir, "adapters", "vscode-chat", "mcp-server.mjs")],
+    env: {
+      GOAL_SYSTEM_ADAPTER: "copilot-cli-mcp",
+    },
+    tools: ["*"],
+  };
+
+  await writeTextAtomic(cliMcpConfigPath, `${JSON.stringify(mcpConfig, null, 2)}\n`);
+}
+
 async function appendInstructionsSnippet() {
   await mkdir(path.dirname(instructionsPath), { recursive: true });
   let existing = "";
@@ -313,14 +333,26 @@ async function installVscodeChatAdapter() {
   return mcpConfigPath;
 }
 
+async function preflightTargetConfigFiles(targets) {
+  if (targets.has("cli")) {
+    await readJsonIfExists(settingsPath);
+    await readJsonIfExists(cliMcpConfigPath);
+  }
+  if (targets.has("vscode-chat")) {
+    await readJsonIfExists(defaultVscodeMcpConfigPath());
+  }
+}
+
 async function main() {
   const targets = selectedTargets(options.target);
+  await preflightTargetConfigFiles(targets);
   await installFiles();
   installDependencies();
 
   let vscodeMcpConfigPath = "";
   if (targets.has("cli")) {
     await mergeSettingsHooks();
+    await installCliMcpServer();
     await appendInstructionsSnippet();
   }
   if (targets.has("vscode-chat")) {
@@ -336,6 +368,7 @@ async function main() {
       `- ${path.join(skillDir, "SKILL.md")}`,
       `- ${path.join(hookDir, "goal-context.sh")}`,
       `- ${settingsPath}`,
+      `- ${cliMcpConfigPath}`,
       `- ${instructionsPath}`
     );
   }
@@ -345,7 +378,7 @@ async function main() {
 
   const nextSteps = [];
   if (targets.has("cli")) {
-    nextSteps.push("Restart Copilot CLI, then run:", "  /skills reload", "  /env");
+    nextSteps.push("Check local health:", `  npm run doctor -- --target ${targets.size > 1 ? "all" : "cli"}`, "Restart Copilot CLI, then run:", "  /skills reload", "  /mcp show", "  /env");
   }
   if (targets.has("vscode-chat")) {
     nextSteps.push("In VS Code, run MCP: Reset Cached Tools or reload the window, then select the Goal System custom agent in Copilot Chat.");

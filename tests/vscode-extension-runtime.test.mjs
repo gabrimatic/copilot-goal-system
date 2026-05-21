@@ -3,16 +3,26 @@ import { createRequire } from "node:module";
 import test from "node:test";
 
 const require = createRequire(import.meta.url);
+const Module = require("node:module");
 const {
   runtimeUpdatePromptKey,
   runtimeVersionState,
 } = require("../vscode-extension/lib/runtime-version.cjs");
 const {
+  cliMcpServerInstalled,
   countDuplicateGoalHooks,
   findStaleDriftHookEvents,
   hookInstalled,
   isGoalContextHook,
 } = require("../vscode-extension/lib/install-status.cjs");
+
+const originalLoad = Module._load;
+Module._load = function patchedLoad(request, parent, isMain) {
+  if (request === "vscode") return { workspace: { getConfiguration: () => ({ get: () => undefined }) }, window: {}, commands: {}, env: {}, Uri: {}, StatusBarAlignment: { Left: 1 } };
+  return originalLoad.call(this, request, parent, isMain);
+};
+const { surfaceSummary } = require("../vscode-extension/extension.cjs");
+Module._load = originalLoad;
 
 test("runtimeVersionState requires install when runtime package is missing", () => {
   assert.deepEqual(
@@ -122,4 +132,96 @@ test("install status reports duplicate goal hooks and stale drift hooks", () => 
     agentStop: 1,
   });
   assert.deepEqual(findStaleDriftHookEvents(settings), ["preToolUse"]);
+});
+
+test("install status recognizes Copilot CLI MCP goal server config", () => {
+  assert.equal(
+    cliMcpServerInstalled({
+      mcpServers: {
+        goalSystem: {
+          type: "local",
+          command: "/usr/local/bin/node",
+          args: ["/Users/test/.copilot/extensions/goal-system/adapters/vscode-chat/mcp-server.mjs"],
+          tools: ["*"],
+        },
+      },
+    }),
+    true
+  );
+  assert.equal(
+    cliMcpServerInstalled(
+      {
+        mcpServers: {
+          goalSystem: {
+            type: "local",
+            command: "/usr/local/bin/node",
+            args: ["/tmp/dead/mcp-server.mjs"],
+            tools: ["*"],
+          },
+        },
+      },
+      {
+        expectedScriptPath: "/Users/test/.copilot/extensions/goal-system/adapters/vscode-chat/mcp-server.mjs",
+      }
+    ),
+    false
+  );
+
+  assert.equal(
+    cliMcpServerInstalled({
+      mcpServers: {
+        goalSystem: {
+          type: "stdio",
+          command: "node",
+          args: ["/Users/test/.copilot/extensions/goal-system/adapters/vscode-chat/mcp-server.mjs"],
+          tools: ["goal_system_status", "goal_system_update"],
+        },
+      },
+    }),
+    true
+  );
+
+  assert.equal(
+    cliMcpServerInstalled({
+      mcpServers: {
+        goalSystem: {
+          type: "http",
+          url: "https://example.invalid/mcp",
+          tools: ["*"],
+        },
+      },
+    }),
+    false
+  );
+});
+
+test("surface status cannot report adapters ready when runtime is missing", () => {
+  const status = {
+    runtimeState: { status: "missing", installed: false },
+    checks: [
+      ["Extension package", false],
+      ["Local runtime version", false],
+      ["Production dependencies", false],
+      ["Local MCP server file", false],
+      ["Goal skill", true],
+      ["CLI hook helper", true],
+      ["CLI settings JSON", true],
+      ["CLI hooks enabled", true],
+      ["All CLI hook entries", true],
+      ["No duplicate CLI goal hooks", true],
+      ["No stale CLI drift hooks", true],
+      ["Copilot CLI MCP goal server", true],
+      ["Instruction snippet", true],
+      ["VS Code Chat custom agent", true],
+      ["VS Code Chat hook config", true],
+      ["VS Code MCP config", true],
+    ],
+  };
+
+  assert.deepEqual(surfaceSummary(status), {
+    runtime: "Missing",
+    cli: "Needs attention",
+    vscodeChat: "Needs attention",
+    recommended: false,
+  });
 });

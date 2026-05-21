@@ -57,6 +57,11 @@ test("installer merges hooks, writes backups, and preserves existing settings", 
   assert.equal(settings.hooks.sessionStart.some((hook) => hook.bash === "$HOME/.copilot/hooks/goal-context.sh"), true);
   assert.equal(settings.hooks.agentStop.some((hook) => hook.bash === "$HOME/.copilot/hooks/goal-context.sh"), true);
 
+  const cliMcpConfig = JSON.parse(await readFile(path.join(copilotDir, "mcp-config.json"), "utf8"));
+  assert.equal(cliMcpConfig.mcpServers.goalSystem.type, "local");
+  assert.match(cliMcpConfig.mcpServers.goalSystem.args[0], /mcp-server\.mjs/);
+  assert.deepEqual(cliMcpConfig.mcpServers.goalSystem.tools, ["*"]);
+
   const snippet = await readFile(path.join(copilotDir, "copilot-instructions.md"), "utf8");
   assert.match(snippet, /copilot-goal-system snippet start/);
 
@@ -71,6 +76,67 @@ test("installer merges hooks, writes backups, and preserves existing settings", 
 
   const findResult = await execFileAsync("find", [copilotDir, "-name", "*.backup-*"], { encoding: "utf8" });
   assert.match(findResult.stdout, /settings\.json\.backup-/);
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("installer adds CLI MCP goal server without overwriting existing MCP servers", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-cli-mcp-"));
+  const copilotDir = path.join(home, ".copilot");
+  await execFileAsync("mkdir", ["-p", copilotDir]);
+  await writeFile(
+    path.join(copilotDir, "mcp-config.json"),
+    JSON.stringify(
+      {
+        mcpServers: {
+          playwright: {
+            type: "stdio",
+            command: "npx",
+            args: ["-y", "@playwright/mcp@latest"],
+            tools: ["*"],
+          },
+        },
+      },
+      null,
+      2
+    )
+  );
+
+  await execFileAsync(process.execPath, [installer], {
+    cwd: root,
+    env: { ...process.env, HOME: home },
+    maxBuffer: 1024 * 1024 * 8,
+  });
+
+  const cliMcpConfig = JSON.parse(await readFile(path.join(copilotDir, "mcp-config.json"), "utf8"));
+  assert.equal(cliMcpConfig.mcpServers.playwright.command, "npx");
+  assert.equal(cliMcpConfig.mcpServers.goalSystem.type, "local");
+  assert.match(cliMcpConfig.mcpServers.goalSystem.args[0], /mcp-server\.mjs/);
+  assert.equal(cliMcpConfig.mcpServers.goalSystem.env.GOAL_SYSTEM_ADAPTER, "copilot-cli-mcp");
+
+  const findResult = await execFileAsync("find", [copilotDir, "-name", "mcp-config.json.backup-*"], { encoding: "utf8" });
+  assert.match(findResult.stdout, /mcp-config\.json\.backup-/);
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("installer refuses corrupt CLI MCP config instead of overwriting it", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-cli-mcp-bad-json-"));
+  const copilotDir = path.join(home, ".copilot");
+  await execFileAsync("mkdir", ["-p", copilotDir]);
+  await writeFile(path.join(copilotDir, "mcp-config.json"), "{bad json");
+
+  await assert.rejects(
+    execFileAsync(process.execPath, [installer], {
+      cwd: root,
+      env: { ...process.env, HOME: home },
+      maxBuffer: 1024 * 1024 * 8,
+    }),
+    /not valid JSON/
+  );
+
+  assert.equal(await readFile(path.join(copilotDir, "mcp-config.json"), "utf8"), "{bad json");
+  await assert.rejects(readFile(path.join(copilotDir, "extensions", "goal-system", "package.json"), "utf8"), /ENOENT/);
 
   await rm(home, { recursive: true, force: true });
 });
@@ -259,6 +325,29 @@ test("installer refuses corrupt settings instead of overwriting them", async () 
   );
 
   assert.equal(await readFile(path.join(copilotDir, "settings.json"), "utf8"), "{bad json");
+  await assert.rejects(readFile(path.join(copilotDir, "extensions", "goal-system", "package.json"), "utf8"), /ENOENT/);
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("installer preflights corrupt VS Code MCP config before changing runtime files", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-vscode-mcp-bad-json-"));
+  const copilotDir = path.join(home, ".copilot");
+  const vscodeMcpConfigPath = path.join(home, "Code", "User", "mcp.json");
+  await execFileAsync("mkdir", ["-p", path.dirname(vscodeMcpConfigPath), copilotDir]);
+  await writeFile(vscodeMcpConfigPath, "{bad json");
+
+  await assert.rejects(
+    execFileAsync(process.execPath, [installer, "--target", "all", "--vscode-mcp-config", vscodeMcpConfigPath], {
+      cwd: root,
+      env: { ...process.env, HOME: home },
+      maxBuffer: 1024 * 1024 * 8,
+    }),
+    /not valid JSON/
+  );
+
+  assert.equal(await readFile(vscodeMcpConfigPath, "utf8"), "{bad json");
+  await assert.rejects(readFile(path.join(copilotDir, "extensions", "goal-system", "package.json"), "utf8"), /ENOENT/);
 
   await rm(home, { recursive: true, force: true });
 });

@@ -68,8 +68,11 @@ For CLI mode, restart Copilot CLI, then run:
 
 ```text
 /skills reload
+/mcp show
 /env
 ```
+
+From the shell, `copilot mcp get goalSystem --json` should also show the configured server.
 
 For VS Code Chat, reload VS Code or run `MCP: Reset Cached Tools`, then select the `Goal System` custom agent in Copilot Chat.
 
@@ -119,6 +122,9 @@ For Copilot CLI, the installer:
 2. Installs production dependencies inside that extension directory.
 3. Installs the goal skill at `~/.copilot/skills/goal/SKILL.md`.
 4. Installs the hook helper at `~/.copilot/hooks/goal-context.sh` and merges hook entries into `~/.copilot/settings.json`.
+5. Adds a `goalSystem` MCP server to `~/.copilot/mcp-config.json` as a standard fallback path for `goal_system_*` tools.
+
+In Copilot CLI, MCP tools may appear with the server-name prefix, such as `goalSystem-goal_system_update`. The goal hooks recognize those names as goal tools and inject the current `sessionId` and `cwd` so they can target the right persisted state.
 
 For VS Code Copilot Chat, the installer:
 
@@ -130,6 +136,14 @@ For VS Code Copilot Chat, the installer:
 The installer preserves existing settings and writes backups before changing JSON or Markdown files.
 During updates, it recognizes existing goal hooks written with `~`, `$HOME`, absolute paths, or wrapper commands. If a composite hook already runs `goal-context.sh`, the installer keeps that hook and avoids adding a duplicate direct goal hook.
 During updates, the installer swaps the installed runtime directory with a fresh package snapshot instead of overlaying files.
+
+Run a local host health check any time the system feels off:
+
+```bash
+npm run doctor
+```
+
+Use `npm run doctor -- --target all` after installing both adapters.
 
 Repository-level hook config is optional. Copy `.github/hooks/goal-system.json` into a repository if you want the same lifecycle hooks committed with a project.
 
