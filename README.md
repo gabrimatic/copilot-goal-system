@@ -8,7 +8,7 @@
 
 Copilot Goal System keeps long-running Copilot work tied to one persisted Active Goal.
 
-It gives GitHub Copilot CLI and VS Code Copilot Chat local goal state, lifecycle hooks, subagent boundaries, drift blocking, and completion gates that require proof before a goal can close. Use it when a task needs to survive compaction, parallel sessions, subagents, and the moment where inspection turns one issue into ten.
+It gives GitHub Copilot CLI and VS Code Copilot Chat local goal state, lifecycle hooks, subagent boundaries, drift warnings, and completion gates that require proof before a goal can close. Use it when a task needs to survive compaction, parallel sessions, subagents, and the moment where inspection turns one issue into ten.
 
 [Quick start](#quick-start) · [What it adds](#what-it-adds) · [How it works](#how-it-works) · [Docs](https://gabrimatic.github.io/copilot-goal-system/) · [Security](./SECURITY.md)
 
@@ -85,7 +85,7 @@ Make this project pass its test suite. Inspect first, fix every in-scope issue, 
 | Area | What it does |
 |------|--------------|
 | Goal tools | `goal_system_open`, `goal_system_status`, `goal_system_update`, and `goal_system_close` create, reload, update, and close persisted goals. Completion is refused without proof. |
-| Lifecycle hooks | Restore goal context, write compact snapshots, block premature stop, deny stale non-goal tools, and keep subagents outside goal ownership. |
+| Lifecycle hooks | Restore goal context, write compact snapshots, block premature stop, warn on stale non-goal tool drift, and keep subagents outside goal ownership. |
 | VS Code Chat adapter | Adds the `Goal System` custom agent, VS Code hook config, and local `goalSystem` MCP server. |
 | Goal contract | Installs the `goal` skill and instruction snippet so Copilot knows the work is execution, not a loose reminder. |
 
@@ -98,7 +98,7 @@ Default behavior:
 - The remaining queue is **dynamic**. Newly discovered in-scope issues are added to the goal and must be resolved before completion.
 - Discovered issues can be **renamed, merged, deduplicated, superseded, or resolved under clearer wording** only with evidence-backed `issueResolutions`.
 - Completion requires **inspection evidence, validation proof, verification results, requirement coverage, no remaining work, no blockers, resolved or evidence-covered discovered issues, and a completion audit**.
-- Tool drift is controlled. After three non-goal tool calls without `goal_system_update`, Copilot gets a warning. At five, non-goal tools are denied until the goal is updated.
+- Tool drift is controlled without deadlocking the session. After three non-goal tool calls without `goal_system_update`, Copilot gets a warning. At five, it gets a critical recovery reminder, but the tool call is still allowed so the agent can inspect, repair, or checkpoint manually when goal tools are unavailable.
 - Stop hooks are blocked while an open goal remains active, with a hard continuation directive that tells Copilot to reload status, continue work, update persisted state, and close only with evidence.
 
 ## Install details

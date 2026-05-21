@@ -22,6 +22,7 @@ import {
 
 const DRIFT_WARN_THRESHOLD = 3;
 const DRIFT_BLOCK_THRESHOLD = 5;
+const HARD_DRIFT_BLOCK = process.env.GOAL_SYSTEM_HARD_DRIFT_BLOCK === "1";
 
 const SUBAGENT_BOUNDARY_NOTE =
   "Goal mode is main-session only. Do not use goal_system_* tools, do not open or close goals, and do not assume the active goal. Complete only your bounded delegated subtask and return real evidence to the main session.";
@@ -240,6 +241,8 @@ async function main() {
         driftCount: drift,
         threshold: DRIFT_BLOCK_THRESHOLD,
         isSubagent: false,
+        hardBlockDrift: HARD_DRIFT_BLOCK,
+        canRecoverWithGoalUpdate: true,
       })
     ) {
       const message = buildDriftEnforcement(drift, DRIFT_BLOCK_THRESHOLD);
@@ -251,10 +254,19 @@ async function main() {
       return;
     }
 
+    if (drift >= DRIFT_BLOCK_THRESHOLD) {
+      const message = buildDriftEnforcement(drift, DRIFT_BLOCK_THRESHOLD);
+      emitSpecific("PreToolUse", {
+        permissionDecision: "allow",
+        additionalContext: message,
+      });
+      return;
+    }
+
     if (drift >= DRIFT_WARN_THRESHOLD) {
       emitSpecific("PreToolUse", {
         permissionDecision: "allow",
-        additionalContext: `Goal-state drift warning: ${drift} tool calls have run since the last goal_system_update. Update the persisted goal before this becomes blocked.`,
+        additionalContext: `Goal-state drift warning: ${drift} tool calls have run since the last goal_system_update. Update the persisted goal at the next useful checkpoint.`,
       });
       return;
     }
@@ -280,7 +292,9 @@ async function main() {
   }
 
   if (eventName === "UserPromptSubmit") {
-    emit({ continue: true, systemMessage: formatGoalSummary(activeGoal, { includeHistory: false }) });
+    const nextGoal = appendGoalHistory(activeGoal, "turn", "User prompt submitted");
+    const persisted = await store.persistGoalRecord(sessionId, cwd, nextGoal);
+    emit({ continue: true, systemMessage: formatGoalSummary(persisted, { includeHistory: false }) });
   }
 }
 

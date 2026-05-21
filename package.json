@@ -1,9 +1,9 @@
 {
   "name": "copilot-goal-system",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "type": "module",
   "private": false,
-  "description": "Persisted goal mode for GitHub Copilot CLI and VS Code Copilot Chat, with local state, drift blocking, and proof-based completion.",
+  "description": "Persisted goal mode for GitHub Copilot CLI and VS Code Copilot Chat, with local state, drift recovery, and proof-based completion.",
   "license": "MIT",
   "author": "Soroush Yousefpour",
   "repository": {

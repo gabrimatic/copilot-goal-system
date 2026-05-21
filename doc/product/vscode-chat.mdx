@@ -67,7 +67,7 @@ The VS Code Chat adapter uses official VS Code hook events:
 |------|----------|
 | `SessionStart` | Injects the current `sessionId`, `cwd`, and active goal context. |
 | `UserPromptSubmit` | Creates a persisted draft goal for explicit `/goal` activation, injects active-goal context, and loads one unambiguous same-directory goal on explicit continuation. |
-| `PreToolUse` | Warns and then denies non-goal tools after repeated goal-state drift. |
+| `PreToolUse` | Warns on repeated goal-state drift and escalates to a critical recovery reminder while still allowing the tool call by default. |
 | `PostToolUse` | Records non-goal tool history into the persisted goal. |
 | `PreCompact` | Writes a compact snapshot before conversation compaction. |
 | `SubagentStart` | Gives subagents a boundary message without exposing goal state. |

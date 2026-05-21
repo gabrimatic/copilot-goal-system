@@ -72,6 +72,63 @@ test("stop continuation directive forces real continuation without issue-string 
   assert.match(directive, /do not bypass the guard by copying unresolved issue text/);
 });
 
+test("tool drift is scoped to the current user turn", () => {
+  const goal = createGoalRecord(
+    {
+      objective: "Keep a long-running task aligned",
+      remaining: ["continue implementation"],
+    },
+    "session:turn-drift",
+    "/tmp/project"
+  );
+
+  const withOlderTools = ["read: src/a.js", "bash: npm test", "view: src/b.js", "rg: TODO", "bash: git diff"].reduce(
+    (current, note) => appendGoalHistory(current, "tool", note),
+    goal
+  );
+  const nextTurn = appendGoalHistory(withOlderTools, "turn", "User prompt submitted");
+  const currentTurn = appendGoalHistory(nextTurn, "tool", "read: src/current.js");
+
+  assert.equal(countToolDrift(withOlderTools), 5);
+  assert.equal(countToolDrift(currentTurn), 1);
+});
+
+test("drift enforcement is opt-in so unavailable update tools cannot deadlock a session", () => {
+  assert.equal(
+    shouldEnforceDrift({
+      hasActiveGoal: true,
+      toolName: "bash",
+      driftCount: 5,
+      threshold: 5,
+      hardBlockDrift: false,
+      canRecoverWithGoalUpdate: false,
+    }),
+    false
+  );
+  assert.equal(
+    shouldEnforceDrift({
+      hasActiveGoal: true,
+      toolName: "bash",
+      driftCount: 5,
+      threshold: 5,
+      hardBlockDrift: true,
+      canRecoverWithGoalUpdate: false,
+    }),
+    false
+  );
+  assert.equal(
+    shouldEnforceDrift({
+      hasActiveGoal: true,
+      toolName: "bash",
+      driftCount: 5,
+      threshold: 5,
+      hardBlockDrift: true,
+      canRecoverWithGoalUpdate: true,
+    }),
+    true
+  );
+});
+
 test("mergeGoal appends durable evidence but lets remaining and blockers be cleared", () => {
   const goal = createGoalRecord(
     {
@@ -415,13 +472,21 @@ test("compact snapshots summarize large queues without mutating authoritative st
   await rm(root, { recursive: true, force: true });
 });
 
-test("drift enforcement blocks non-goal tools after the configured threshold", () => {
+test("strict drift enforcement blocks non-goal tools only when recovery is available", () => {
   assert.equal(isGoalSystemToolName("goal_system_update"), true);
   assert.equal(isGoalSystemToolName("mcp_goalSystem_goal_system_update"), true);
   assert.equal(isGoalSystemToolName("bash"), false);
 
   assert.equal(
-    shouldEnforceDrift({ hasActiveGoal: true, toolName: "bash", driftCount: 5, threshold: 5, isSubagent: false }),
+    shouldEnforceDrift({
+      hasActiveGoal: true,
+      toolName: "bash",
+      driftCount: 5,
+      threshold: 5,
+      isSubagent: false,
+      hardBlockDrift: true,
+      canRecoverWithGoalUpdate: true,
+    }),
     true
   );
   assert.equal(

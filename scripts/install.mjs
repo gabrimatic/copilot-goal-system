@@ -130,6 +130,21 @@ function sameHook(left, right) {
   return left?.type === right?.type && left?.bash === right?.bash && (left?.matcher || "") === (right?.matcher || "");
 }
 
+function hookCommandText(hook) {
+  return [hook?.bash, hook?.command, hook?.windows].filter(Boolean).join(" ");
+}
+
+function isGoalSystemOwnedHook(hook) {
+  return /(?:goal-context\.sh|goal-system|hook-runner\.mjs)/.test(hookCommandText(hook));
+}
+
+function removeStaleCliDriftHooks(settings) {
+  for (const eventName of ["preToolUse", "postToolUse", "PreToolUse", "PostToolUse"]) {
+    if (!Array.isArray(settings.hooks[eventName])) continue;
+    settings.hooks[eventName] = settings.hooks[eventName].filter((hook) => !isGoalSystemOwnedHook(hook));
+  }
+}
+
 async function mergeSettingsHooks() {
   await mkdir(copilotRoot, { recursive: true });
   let originalSettings = null;
@@ -141,6 +156,7 @@ async function mergeSettingsHooks() {
 
   const settings = await readJsonIfExists(settingsPath);
   settings.hooks = settings.hooks && typeof settings.hooks === "object" ? settings.hooks : {};
+  removeStaleCliDriftHooks(settings);
 
   for (const [eventName, goalHooks] of Object.entries(hookEvents)) {
     const existing = Array.isArray(settings.hooks[eventName]) ? settings.hooks[eventName] : [];

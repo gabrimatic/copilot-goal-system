@@ -32,7 +32,7 @@ After extension updates, VS Code compares the extension bundle with the installe
 |------|--------------|
 | Goal state | Persists one active goal for the main Copilot session, restores compact context after resume or compaction, and loads one unambiguous same-directory goal on explicit continuation. |
 | Session boundaries | Keeps parallel same-directory sessions isolated and keeps subagents outside goal ownership. |
-| Completion gates | Tracks newly discovered and renamed issues, warns on stale goal state, blocks drift, and refuses completion without inspection evidence, verification results, requirement coverage, no remaining work, no blockers, and a completion audit. |
+| Completion gates | Tracks newly discovered and renamed issues, warns on stale goal state, keeps drift recoverable, and refuses completion without inspection evidence, verification results, requirement coverage, no remaining work, no blockers, and a completion audit. |
 | VS Code setup | Installs and updates from VS Code, adds the `Goal System` custom agent, configures hooks and MCP tools, and shows setup or update state in the status bar. |
 
 ## Commands

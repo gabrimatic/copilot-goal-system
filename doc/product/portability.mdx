@@ -5,7 +5,7 @@ description: "Why this release is Copilot-first and what other hosts need before
 
 This release is Copilot-first.
 
-The portable part is the pattern: keep a persisted Active Goal outside chat memory, inject compact reminders at lifecycle boundaries, deny drift, isolate subagents, and refuse completion without proof.
+The portable part is the pattern: keep a persisted Active Goal outside chat memory, inject compact reminders at lifecycle boundaries, warn on drift without trapping recovery, isolate subagents, and refuse completion without proof.
 
 The implementation is not automatically portable because every host exposes different hooks, tools, settings, and subagent metadata.
 
@@ -18,7 +18,7 @@ Any adapter needs these primitives:
 | User-triggered skill or slash command | Goal mode must stay manual. |
 | Local persistent tool state | Goal state must survive compaction and resume. |
 | Custom tools | The model needs explicit `status`, `open`, `update`, and `close` operations. |
-| Pre-tool decision hook | Drift blocking needs a way to deny stale tool calls. |
+| Pre-tool decision hook | Drift recovery needs a way to inject warnings before stale tool calls continue. |
 | Prompt/session hooks | Continuation needs compact context injection. |
 | Stop hook | Open goals need a way to block premature turn completion. |
 | Subagent lifecycle metadata | Subagents must be excluded from goal ownership. |

@@ -5,7 +5,7 @@ description: "Persisted goal mode for GitHub Copilot CLI and VS Code Copilot Cha
 
 Copilot Goal System keeps long-running Copilot work tied to one persisted Active Goal.
 
-It gives GitHub Copilot CLI and VS Code Copilot Chat local goal state, lifecycle hooks, subagent boundaries, drift blocking, and completion gates that require proof before a goal can close. Use it when a task needs to survive compaction, parallel sessions, subagents, and the moment where inspection turns one issue into ten.
+It gives GitHub Copilot CLI and VS Code Copilot Chat local goal state, lifecycle hooks, subagent boundaries, drift warnings, and completion gates that require proof before a goal can close. Use it when a task needs to survive compaction, parallel sessions, subagents, and the moment where inspection turns one issue into ten.
 
 ## Start here
 
@@ -31,7 +31,7 @@ curl -fsSL https://gabrimatic.github.io/copilot-goal-system/install.sh | bash -s
 | Area | What it does |
 |------|--------------|
 | Goal tools | `goal_system_open`, `goal_system_status`, `goal_system_update`, and `goal_system_close` create, reload, update, and close persisted goals. Completion is refused without proof. |
-| Lifecycle hooks | Restore goal context, write compact snapshots, block premature stop, deny stale non-goal tools, and keep subagents outside goal ownership. |
+| Lifecycle hooks | Restore goal context, write compact snapshots, block premature stop, warn on stale non-goal tool drift, and keep subagents outside goal ownership. |
 | VS Code Chat adapter | Adds the `Goal System` custom agent, VS Code hook config, and local `goalSystem` MCP server. |
 | Goal contract | Installs the `goal` skill and instruction snippet so Copilot knows the work is execution, not a loose reminder. |
 
@@ -40,5 +40,6 @@ curl -fsSL https://gabrimatic.github.io/copilot-goal-system/install.sh | bash -s
 - Goal mode is manual. Normal prompts do not become goals.
 - `/goal` activation creates a persisted draft goal before work begins.
 - Goal state is main-session only. Subagents cannot open, update, read, or close goals.
+- Drift warnings are recoverable. Stale tool use escalates from warning to critical reminder, but default installs do not deny every tool call when the update tool is missing or ignored.
 - Same-directory sessions are isolated.
 - Completion requires inspection evidence, validation proof, verification results, requirement coverage, no remaining work, no blockers, resolved or evidence-covered discovered issues, and a completion audit.

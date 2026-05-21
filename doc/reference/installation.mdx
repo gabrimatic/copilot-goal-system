@@ -221,9 +221,9 @@ find ~/.copilot/session-state -path '*goal*' -maxdepth 5 -type f | sort
 
 Run `goal_system_status` inside Copilot before continuing. If no state exists, start a new goal and inspect before acting.
 
-### Tool calls get denied
+### Drift warnings keep repeating
 
-The drift guard is working. Call `goal_system_update` with real progress, inspection evidence, verification results, remaining work, or blockers.
+Call `goal_system_update` with real progress, inspection evidence, verification results, remaining work, or blockers. If the goal tools are missing, the default guard should still allow recovery tool calls; rerun the installer to remove stale CLI `preToolUse` or `postToolUse` goal hooks from older installs.
 
 ### VS Code Chat tools do not appear
 

@@ -120,9 +120,9 @@ When a goal is active, call `goal_system_update` after every meaningful step:
 - After running tests or checks (record verificationResults)
 - After completing a phase of work (update remaining)
 
-Never let more than 5 tool calls pass without calling `goal_system_update`. The extension tracks drift, warns after 3 non-goal tool calls, and blocks the next non-goal tool after 5 until `goal_system_update` records real state. If you see a drift warning, your immediate next action must be `goal_system_update` unless you first need `goal_system_status` to reload authoritative state.
+Do not let long runs drift away from persisted state. The extension tracks drift within each user turn, warns after 3 non-goal tool calls, and escalates after 5. The default guard remains recoverable: it warns instead of denying all tools, so missing or unavailable goal tools cannot deadlock the session. If you see a drift warning, your next useful checkpoint should be `goal_system_update` unless you first need `goal_system_status` to reload authoritative state.
 
-This is the point of the system. Drifting without updates breaks the contract.
+This is the point of the system. Drifting without updates breaks the contract, but tool-use deadlocks are not an acceptable enforcement mechanism.
 
 If `goal_system_update` fails, do not continue as if state was saved. Read the error, call `goal_system_status` if useful, then retry with concrete state fields. If the state tools are unavailable, say that goal persistence is unavailable and keep a concise manual checkpoint in the final response.
 

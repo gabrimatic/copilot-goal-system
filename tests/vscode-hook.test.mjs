@@ -253,7 +253,7 @@ test("VS Code UserPromptSubmit creates a persisted draft goal on explicit activa
   await rm(home, { recursive: true, force: true });
 });
 
-test("VS Code PreToolUse denies drift after repeated non-goal tools", async () => {
+test("VS Code PreToolUse warns but allows critical drift so recovery tools never deadlock", async () => {
   const home = path.join(tmpdir(), `goal-vscode-hook-${process.pid}-drift`);
   const cwd = path.join(home, "project");
   await mkdir(cwd, { recursive: true });
@@ -279,8 +279,54 @@ test("VS Code PreToolUse denies drift after repeated non-goal tools", async () =
 
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.hookSpecificOutput.hookEventName, "PreToolUse");
-  assert.equal(parsed.hookSpecificOutput.permissionDecision, "deny");
-  assert.match(parsed.hookSpecificOutput.permissionDecisionReason, /Goal-state drift guard/);
+  assert.equal(parsed.hookSpecificOutput.permissionDecision, "allow");
+  assert.match(parsed.hookSpecificOutput.additionalContext, /Goal-state drift guard/);
+  assert.doesNotMatch(result.stdout, /"deny"/);
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("VS Code UserPromptSubmit starts a fresh drift window for the next turn", async () => {
+  const home = path.join(tmpdir(), `goal-vscode-hook-${process.pid}-turn-reset`);
+  const cwd = path.join(home, "project");
+  await mkdir(cwd, { recursive: true });
+  await writeGoal(home, "session-turn-reset", cwd, {
+    history: Array.from({ length: 5 }, (_, index) => ({
+      at: `2026-05-07T07:0${index}:00.000Z`,
+      type: "tool",
+      note: `read: stale-${index}.js`,
+    })),
+  });
+
+  const promptResult = await runHook(
+    {
+      hookEventName: "UserPromptSubmit",
+      sessionId: "session-turn-reset",
+      cwd,
+      prompt: "keep going",
+    },
+    { HOME: home }
+  );
+
+  const promptParsed = JSON.parse(promptResult.stdout);
+  assert.equal(promptParsed.continue, true);
+
+  const toolResult = await runHook(
+    {
+      hookEventName: "PreToolUse",
+      sessionId: "session-turn-reset",
+      cwd,
+      tool_name: "runTerminalCommand",
+      tool_input: { command: "npm test" },
+      tool_use_id: "tool-after-turn",
+    },
+    { HOME: home }
+  );
+
+  assert.equal(toolResult.stdout, "{\"continue\":true}");
+
+  const goal = JSON.parse(await readFile(path.join(home, ".copilot", "session-state", "goal-system", "by-session", "session-turn-reset.json"), "utf8"));
+  assert.equal(goal.history.at(-1).type, "turn");
 
   await rm(home, { recursive: true, force: true });
 });

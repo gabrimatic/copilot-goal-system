@@ -7,6 +7,7 @@ import {
   ISSUE_RESOLUTION_STATUSES,
   MUTABLE_GOAL_STATUSES,
   GoalStore,
+  appendGoalHistory,
   appendPromptNote,
   buildDriftEnforcement,
   buildGoalPromptNote,
@@ -48,6 +49,7 @@ let flushTimer = null;
 
 const DRIFT_WARN_THRESHOLD = 3;
 const DRIFT_BLOCK_THRESHOLD = 5;
+const HARD_DRIFT_BLOCK = process.env.GOAL_SYSTEM_HARD_DRIFT_BLOCK === "1";
 
 const SUBAGENT_BOUNDARY_NOTE =
   "Goal mode is main-session only. Subagents must not open, update, read, close, or infer goal state. Complete only the delegated subtask and return evidence to the main session.";
@@ -272,6 +274,14 @@ const session = await joinSession({
       }
 
       if (activeGoal) {
+        const sid = safeSessionId(invocation.sessionId);
+        driftCountBySession.set(sid, 0);
+        const turnGoal = await persistAndTrack(
+          invocation,
+          sessionCwd,
+          appendGoalHistory(activeGoal, "turn", "User prompt submitted")
+        );
+
         if (explicitlyReplaces && !isContinuePrompt) {
           return {
             modifiedPrompt: appendPromptNote(
@@ -285,7 +295,6 @@ const session = await joinSession({
           };
         }
 
-        const sid = safeSessionId(invocation.sessionId);
         const drift = driftCountBySession.get(sid) || 0;
         let driftEnforcement = "";
         if (drift >= DRIFT_BLOCK_THRESHOLD) {
@@ -296,7 +305,7 @@ const session = await joinSession({
           store.auditLog("drift_warn", { sid, drift });
         }
 
-        return { modifiedPrompt: appendPromptNote(prompt, buildGoalPromptNote(activeGoal) + driftEnforcement) };
+        return { modifiedPrompt: appendPromptNote(prompt, buildGoalPromptNote(turnGoal) + driftEnforcement) };
       }
 
       if (isContinuePrompt) {
@@ -347,6 +356,8 @@ const session = await joinSession({
           driftCount: drift,
           threshold: DRIFT_BLOCK_THRESHOLD,
           isSubagent: isLikelySubagentInvocation(invocation),
+          hardBlockDrift: HARD_DRIFT_BLOCK,
+          canRecoverWithGoalUpdate: true,
         })
       ) {
         const message = buildDriftEnforcement(drift, DRIFT_BLOCK_THRESHOLD);
@@ -358,9 +369,18 @@ const session = await joinSession({
         };
       }
 
+      if (drift >= DRIFT_BLOCK_THRESHOLD) {
+        const message = buildDriftEnforcement(drift, DRIFT_BLOCK_THRESHOLD);
+        store.auditLog("drift_critical_allow", { sid: sessionId, drift, toolName });
+        return {
+          permissionDecision: "allow",
+          additionalContext: message,
+        };
+      }
+
       if (drift >= DRIFT_WARN_THRESHOLD) {
         return {
-          additionalContext: `Goal-state drift warning: ${drift} tool calls have run since the last goal_system_update. Update the persisted goal before this becomes blocked.`,
+          additionalContext: `Goal-state drift warning: ${drift} tool calls have run since the last goal_system_update. Update the persisted goal at the next useful checkpoint.`,
         };
       }
 

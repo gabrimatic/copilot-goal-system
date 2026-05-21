@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.6
+
+- Makes drift recovery non-deadlocking by default: critical drift now injects a recovery reminder while allowing the tool call.
+- Resets VS Code Chat drift accounting at each new user turn.
+- Installs the updated runtime that removes stale Copilot CLI drift hooks during local setup.
+
 ## 1.1.5
 
 - Creates persisted draft goals from explicit `/goal` prompts in VS Code Chat instead of relying only on agent instructions.

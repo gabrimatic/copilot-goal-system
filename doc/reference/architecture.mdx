@@ -1,6 +1,6 @@
 ---
 title: "Architecture"
-description: "State model, adapters, hooks, drift enforcement, subagent boundaries, and the completion gate."
+description: "State model, adapters, hooks, drift recovery, subagent boundaries, and the completion gate."
 ---
 
 Copilot Goal System is a local state machine with host-specific adapters.
@@ -23,7 +23,7 @@ Prompt starts /goal
   -> skill or custom agent tells Copilot to use goal_system_* tools
   -> SDK or MCP tool opens or updates persisted goal state
   -> post-tool hooks track tool history and drift
-  -> pre-tool hooks deny stale non-goal tool calls after the threshold
+  -> pre-tool hooks inject recoverable drift warnings after the threshold
   -> stop hooks block premature turn completion
   -> goal_system_close enforces proof before complete
 ```
@@ -130,7 +130,7 @@ The VS Code Chat adapter uses:
 VS Code hooks inject `sessionId` and `cwd` into the chat context. MCP tools require those values so multiple sessions in one workspace stay isolated. Persisted tool history drives drift enforcement across VS Code hook invocations.
 `UserPromptSubmit` also gives VS Code Chat the same activation and continuation bridge as the CLI path: `/goal` creates a persisted draft goal immediately, and an explicit continue prompt can hydrate one unambiguous same-directory goal into the current session.
 
-## Drift enforcement
+## Drift recovery
 
 Adapters track non-goal tool calls while a goal is open.
 
@@ -138,9 +138,11 @@ Adapters track non-goal tool calls while a goal is open.
 |--------------------|----------|
 | 0-2 | No warning. |
 | 3-4 | Prompt-level warning. |
-| 5+ | `onPreToolUse` denies the next non-goal tool call. |
+| 5+ | Critical recovery reminder. The tool call is allowed by default so the session can inspect, repair, call `goal_system_update`, or keep a manual checkpoint if goal tools are unavailable. |
 
 `goal_system_status`, `goal_system_open`, `goal_system_update`, and `goal_system_close` do not count toward drift, including MCP-prefixed tool names in VS Code.
+
+Hard pre-tool denial is opt-in through `GOAL_SYSTEM_HARD_DRIFT_BLOCK=1` and should be used only in hosts where `goal_system_update` is known to be available in the same session. Default installs favor recoverability over permission deadlock.
 
 Stop hooks use the same continuation contract in CLI and VS Code Chat: if the current main session still has an open goal, the hook blocks stop and tells the model to reload status, continue the next concrete remaining item, update persisted state, and close only with evidence. Alternate stop payloads such as `finishReason`, `completionReason`, and `terminationReason` are treated as stop attempts.
 

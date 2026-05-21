@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.6
+
+- Makes drift recovery non-deadlocking by default: critical drift now injects a recovery reminder while allowing the tool call, with hard denial left behind an explicit `GOAL_SYSTEM_HARD_DRIFT_BLOCK=1` opt-in.
+- Resets drift accounting at each new user turn so stale tool history from an older turn cannot permanently lock a session.
+- Removes stale goal-system `preToolUse` and `postToolUse` hooks from Copilot CLI settings during install or update.
+- Updates the goal skill, docs, and regression tests for the recoverable drift contract.
+
 ## 1.1.5
 
 - Fixes `/goal` slash-command activation detection so adapters that rely on shared activation logic create persisted goals correctly.
