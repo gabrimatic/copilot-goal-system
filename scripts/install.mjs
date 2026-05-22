@@ -452,6 +452,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error.message);
-  process.exit(1);
+  process.stderr.write(`${error?.message || String(error)}\n`);
+  process.exitCode = 1;
 });

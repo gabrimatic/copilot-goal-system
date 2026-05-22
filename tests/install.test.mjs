@@ -17,6 +17,17 @@ async function readJsonc(filePath) {
   return parseJsonc(await readFile(filePath, "utf8"));
 }
 
+async function assertCommandFails(commandPromise, pattern) {
+  try {
+    await commandPromise;
+  } catch (error) {
+    const output = [error.stdout, error.stderr, error.message].filter(Boolean).join("\n");
+    assert.match(output, pattern);
+    return error;
+  }
+  assert.fail("Expected command to fail.");
+}
+
 test("installer merges hooks, writes backups, and preserves existing settings", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-test-"));
   const copilotDir = path.join(home, ".copilot");
@@ -204,7 +215,7 @@ test("installer refuses corrupt CLI MCP config instead of overwriting it", async
   await execFileAsync("mkdir", ["-p", copilotDir]);
   await writeFile(path.join(copilotDir, "mcp-config.json"), "{bad json");
 
-  await assert.rejects(
+  await assertCommandFails(
     execFileAsync(process.execPath, [installer], {
       cwd: root,
       env: { ...process.env, HOME: home },
@@ -400,7 +411,7 @@ test("installer keeps existing runtime when dependency install fails during upda
   await writeFile(fakeNpm, "#!/usr/bin/env bash\necho 'simulated npm failure' >&2\nexit 1\n");
   await chmod(fakeNpm, 0o755);
 
-  await assert.rejects(
+  await assertCommandFails(
     execFileAsync(process.execPath, [installer], {
       cwd: root,
       env: { ...process.env, GOAL_SYSTEM_TEST_LINK_NODE_MODULES: "", HOME: home, PATH: `${fakeBin}:${process.env.PATH || ""}` },
@@ -428,7 +439,7 @@ test("installer refuses non-object config before replacing existing runtime", as
   await writeFile(path.join(extensionDir, "old-runtime-marker.txt"), "still here");
   await writeFile(path.join(copilotDir, "settings.json"), "[]\n");
 
-  await assert.rejects(
+  await assertCommandFails(
     execFileAsync(process.execPath, [installer], {
       cwd: root,
       env: { ...process.env, HOME: home },
@@ -489,7 +500,7 @@ test("installer refuses corrupt settings instead of overwriting them", async () 
   await execFileAsync("mkdir", ["-p", copilotDir]);
   await writeFile(path.join(copilotDir, "settings.json"), "{bad json");
 
-  await assert.rejects(
+  await assertCommandFails(
     execFileAsync(process.execPath, [installer], {
       cwd: root,
       env: { ...process.env, HOME: home },
@@ -511,7 +522,7 @@ test("installer preflights corrupt VS Code MCP config before changing runtime fi
   await execFileAsync("mkdir", ["-p", path.dirname(vscodeMcpConfigPath), copilotDir]);
   await writeFile(vscodeMcpConfigPath, "{bad json");
 
-  await assert.rejects(
+  await assertCommandFails(
     execFileAsync(process.execPath, [installer, "--target", "all", "--vscode-mcp-config", vscodeMcpConfigPath], {
       cwd: root,
       env: { ...process.env, HOME: home },

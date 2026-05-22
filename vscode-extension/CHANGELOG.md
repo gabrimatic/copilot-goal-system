@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.14
+
+- Fixes installer and helper-script error output so CI and terminal users reliably see the real failure reason.
+- Stabilizes corrupt-config installer tests across Node runtimes.
+
 ## 1.1.13
 
 - Installs `jq` in CI and publish workflows so Linux release checks cover CLI hook behavior.

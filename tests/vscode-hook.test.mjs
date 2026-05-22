@@ -26,9 +26,9 @@ async function runHook(input, env = {}) {
       stderr += chunk;
     });
     child.on("error", reject);
-    child.on("close", (code) => {
+    child.on("close", (code, signal) => {
       if (code !== 0) {
-        reject(new Error(`VS Code hook exited ${code}: ${stderr}`));
+        reject(new Error(`VS Code hook exited ${code}${signal ? ` signal ${signal}` : ""}: ${stderr}${stdout ? `\nstdout: ${stdout}` : ""}`));
         return;
       }
       resolve({ stdout: stdout.trim(), stderr: stderr.trim() });

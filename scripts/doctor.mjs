@@ -224,7 +224,8 @@ async function main() {
 
   if (options.json) {
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-    process.exit(report.ok ? 0 : 1);
+    process.exitCode = report.ok ? 0 : 1;
+    return;
   }
 
   process.stdout.write(`Copilot Goal System doctor (${report.packageVersion})\n`);
@@ -237,10 +238,10 @@ async function main() {
     if (!item.ok && item.remediation) process.stdout.write(`  Fix: ${item.remediation}\n`);
   }
   process.stdout.write(`\nResult: ${report.ok ? "healthy" : "needs attention"}\n`);
-  process.exit(report.ok ? 0 : 1);
+  process.exitCode = report.ok ? 0 : 1;
 }
 
 main().catch((error) => {
   process.stderr.write(`${error.message || String(error)}\n`);
-  process.exit(1);
+  process.exitCode = 1;
 });

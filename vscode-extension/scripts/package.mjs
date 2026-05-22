@@ -18,7 +18,7 @@ const result = spawnSync("vsce", ["package", "--out", outputPath], {
 
 if (result.error) {
   console.error(result.error.message);
-  process.exit(1);
+  process.exitCode = 1;
+} else {
+  process.exitCode = result.status ?? 1;
 }
-
-process.exit(result.status ?? 1);

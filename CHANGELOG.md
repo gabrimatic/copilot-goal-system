@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.14
+
+- Fixes the installer and release helper error paths so piped CI output cannot lose the real failure message before exit.
+- Stabilizes corrupt-config installer regression tests by matching captured process output instead of Node's runtime-specific `execFile` wrapper message.
+- Serializes the Node test runner so installer and doctor tests that spawn local processes cannot race each other in CI.
+- Adds release verification coverage for the GitHub runner shape that exposed the flake: Linux x64, Node 20, and CI-mode environment variables.
+
 ## 1.1.13
 
 - Installs `jq` in CI and Marketplace publish workflows so Linux release checks exercise the CLI hook helper instead of silently skipping it.

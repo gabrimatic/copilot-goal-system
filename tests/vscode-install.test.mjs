@@ -12,6 +12,17 @@ const root = path.resolve(".");
 const installer = path.join(root, "scripts", "install.mjs");
 process.env.GOAL_SYSTEM_TEST_LINK_NODE_MODULES = path.join(root, "node_modules");
 
+async function assertCommandFails(commandPromise, pattern) {
+  try {
+    await commandPromise;
+  } catch (error) {
+    const output = [error.stdout, error.stderr, error.message].filter(Boolean).join("\n");
+    assert.match(output, pattern);
+    return error;
+  }
+  assert.fail("Expected command to fail.");
+}
+
 test("installer can add VS Code Chat adapter without overwriting existing MCP servers", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "goal-vscode-install-"));
   const mcpConfigPath = path.join(home, "Code", "User", "mcp.json");
@@ -69,7 +80,7 @@ test("installer refuses corrupt VS Code MCP config instead of overwriting it", a
   await execFileAsync("mkdir", ["-p", path.dirname(mcpConfigPath)]);
   await writeFile(mcpConfigPath, "{bad json");
 
-  await assert.rejects(
+  await assertCommandFails(
     execFileAsync(process.execPath, [installer, "--target", "vscode-chat", "--vscode-mcp-config", mcpConfigPath], {
       cwd: root,
       env: { ...process.env, HOME: home },

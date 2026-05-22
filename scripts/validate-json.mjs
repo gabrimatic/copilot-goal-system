@@ -12,4 +12,4 @@ for (const filePath of process.argv.slice(2)) {
   }
 }
 
-if (failed) process.exit(1);
+if (failed) process.exitCode = 1;
