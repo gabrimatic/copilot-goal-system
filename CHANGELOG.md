@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.16
+
+- Recovers malformed or non-object Copilot and VS Code MCP target config files during install/update by preserving the original as an `*.invalid-backup-*` file, recreating a clean JSON object, and continuing setup.
+- Preserves existing config file permissions when writing backups or replacing target JSON/JSONC files, with new config files defaulting to owner-only permissions.
+- Adds regression coverage for corrupt Copilot CLI settings, corrupt Copilot CLI MCP config, corrupt VS Code MCP config, and parseable non-object settings so reinstall cannot loop on the same broken local file.
+- Documents the config recovery behavior for CLI and Marketplace installs.
+
 ## 1.1.15
 
 - Fixes Linux CI doctor tests by isolating fake-home `XDG_CONFIG_HOME` paths before release.

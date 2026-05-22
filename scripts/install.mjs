@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { access, chmod, copyFile, cp, mkdir, readFile, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { access, chmod, copyFile, cp, mkdir, readFile, realpath, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
@@ -97,30 +97,79 @@ async function readJsonDocumentIfExists(filePath) {
   }
 }
 
+async function recoverInvalidJsonObjectDocument(filePath, raw, description, reason) {
+  const backupPath = `${filePath}.invalid-backup-${stamp()}-${process.pid}`;
+  const trimmedReason = String(reason).replace(/[.?!]\s*$/, "");
+  const mode = await fileModeForWrite(filePath);
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(backupPath, raw, { encoding: "utf8", mode });
+  await writeTextAtomic(filePath, "{}\n", { backup: false });
+  process.stderr.write(
+    `${filePath} could not be used as ${description}: ${trimmedReason}. ` +
+      `Backed up the original file to ${backupPath} and recreated a clean JSON object.\n`
+  );
+  return { raw: "{}\n", value: {}, exists: true, recovered: true, backupPath };
+}
+
 async function readEditableJsonObjectDocument(filePath, description) {
-  const document = await readJsonDocumentIfExists(filePath);
+  let document;
+  try {
+    document = await readJsonDocumentIfExists(filePath);
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      const raw = await readFile(filePath, "utf8");
+      return recoverInvalidJsonObjectDocument(
+        filePath,
+        raw,
+        description,
+        error.message
+      );
+    }
+    throw error;
+  }
   if (!document.value || typeof document.value !== "object" || Array.isArray(document.value)) {
-    throw new Error(`${filePath} must contain a JSON object for ${description}. That config file was not changed.`);
+    return recoverInvalidJsonObjectDocument(filePath, document.raw, description, "the file must contain a JSON object");
   }
   return document;
+}
+
+async function fileModeForWrite(filePath) {
+  try {
+    return (await stat(filePath)).mode & 0o777;
+  } catch (error) {
+    if (error.code === "ENOENT") return 0o600;
+    throw error;
+  }
+}
+
+async function preflightEditableJsonObjectDocument(filePath) {
+  try {
+    await readJsonDocumentIfExists(filePath);
+  } catch (error) {
+    if (error instanceof SyntaxError) return;
+    throw error;
+  }
 }
 
 async function writeTextAtomic(filePath, text, options = {}) {
   const { backup = true } = options;
   let original = null;
+  let mode = 0o600;
   try {
     original = await readFile(filePath, "utf8");
+    mode = await fileModeForWrite(filePath);
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
 
   await mkdir(path.dirname(filePath), { recursive: true });
   if (backup && original !== null && original !== text) {
-    await writeFile(`${filePath}.backup-${stamp()}`, original, "utf8");
+    await writeFile(`${filePath}.backup-${stamp()}`, original, { encoding: "utf8", mode });
   }
 
   const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
-  await writeFile(tempPath, text, "utf8");
+  await writeFile(tempPath, text, { encoding: "utf8", mode });
+  await chmod(tempPath, mode);
   await rename(tempPath, filePath);
 }
 
@@ -400,11 +449,11 @@ async function installVscodeChatAdapter() {
 
 async function preflightTargetConfigFiles(targets) {
   if (targets.has("cli")) {
-    await readEditableJsonObjectDocument(settingsPath, "Copilot CLI settings");
-    await readEditableJsonObjectDocument(cliMcpConfigPath, "Copilot CLI MCP config");
+    await preflightEditableJsonObjectDocument(settingsPath);
+    await preflightEditableJsonObjectDocument(cliMcpConfigPath);
   }
   if (targets.has("vscode-chat")) {
-    await readEditableJsonObjectDocument(defaultVscodeMcpConfigPath(), "VS Code MCP config");
+    await preflightEditableJsonObjectDocument(defaultVscodeMcpConfigPath());
   }
 }
 

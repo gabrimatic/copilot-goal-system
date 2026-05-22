@@ -98,9 +98,10 @@ After installing only `vscode-chat`, reload VS Code or run `MCP: Reset Cached To
 | `~/.copilot/settings.json` | Hook entries are merged into existing settings. |
 | `~/.copilot/copilot-instructions.md` | A short goal-system reminder is appended once. |
 
-The installer preserves existing settings. It appends missing goal hooks, leaves unrelated hooks alone, and recognizes existing goal hooks written with `~`, `$HOME`, `$COPILOT_HOME`, absolute paths, or wrapper commands. If a composite user hook already runs `goal-context.sh`, the installer keeps that hook and does not add a duplicate direct goal hook. Empty JSON or JSONC config files are initialized as empty objects; malformed non-empty JSON/JSONC is refused so existing data is not overwritten.
+The installer preserves existing settings. It appends missing goal hooks, leaves unrelated hooks alone, and recognizes existing goal hooks written with `~`, `$HOME`, `$COPILOT_HOME`, absolute paths, or wrapper commands. If a composite user hook already runs `goal-context.sh`, the installer keeps that hook and does not add a duplicate direct goal hook. Empty JSON or JSONC config files are initialized as empty objects. Malformed JSON/JSONC or parseable non-object target config files are preserved as `*.invalid-backup-*`, replaced with a clean JSON object, and then updated so reinstall and update flows can recover from broken local config.
 
 Copilot CLI `settings.json`, Copilot CLI `mcp-config.json`, and VS Code profile `mcp.json` are handled as JSONC-compatible config files. Comments and trailing commas are accepted, and comments outside the exact updated subtree are preserved while the installer updates `hooks`, `mcpServers.goalSystem`, or `servers.goalSystem`.
+Config backups keep the original file permissions, and newly created config files default to owner-only permissions.
 
 Runtime updates are prepared in a temporary directory first. The installer copies the new package, runs `npm ci --omit=dev --ignore-scripts`, and marks runtime entrypoints executable before replacing `~/.copilot/extensions/goal-system/`. If dependency installation fails, the previous runtime remains in place and config files are not changed.
 

@@ -12,17 +12,6 @@ const root = path.resolve(".");
 const installer = path.join(root, "scripts", "install.mjs");
 process.env.GOAL_SYSTEM_TEST_LINK_NODE_MODULES = path.join(root, "node_modules");
 
-async function assertCommandFails(commandPromise, pattern) {
-  try {
-    await commandPromise;
-  } catch (error) {
-    const output = [error.stdout, error.stderr, error.message].filter(Boolean).join("\n");
-    assert.match(output, pattern);
-    return error;
-  }
-  assert.fail("Expected command to fail.");
-}
-
 test("installer can add VS Code Chat adapter without overwriting existing MCP servers", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "goal-vscode-install-"));
   const mcpConfigPath = path.join(home, "Code", "User", "mcp.json");
@@ -74,22 +63,25 @@ test("installer can add VS Code Chat adapter without overwriting existing MCP se
   await rm(home, { recursive: true, force: true });
 });
 
-test("installer refuses corrupt VS Code MCP config instead of overwriting it", async () => {
+test("installer recovers corrupt VS Code MCP config by preserving an invalid backup", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "goal-vscode-install-bad-json-"));
   const mcpConfigPath = path.join(home, "Code", "User", "mcp.json");
   await execFileAsync("mkdir", ["-p", path.dirname(mcpConfigPath)]);
   await writeFile(mcpConfigPath, "{bad json");
 
-  await assertCommandFails(
-    execFileAsync(process.execPath, [installer, "--target", "vscode-chat", "--vscode-mcp-config", mcpConfigPath], {
-      cwd: root,
-      env: { ...process.env, HOME: home },
-      maxBuffer: 1024 * 1024 * 12,
-    }),
-    /not valid JSON/
-  );
+  const { stderr } = await execFileAsync(process.execPath, [installer, "--target", "vscode-chat", "--vscode-mcp-config", mcpConfigPath], {
+    cwd: root,
+    env: { ...process.env, HOME: home },
+    maxBuffer: 1024 * 1024 * 12,
+  });
 
-  assert.equal(await readFile(mcpConfigPath, "utf8"), "{bad json");
+  assert.match(stderr, /could not be used as VS Code MCP config/);
+  const backups = await execFileAsync("find", [home, "-name", "mcp.json.invalid-backup-*"], { encoding: "utf8" });
+  const backupPaths = backups.stdout.trim().split("\n").filter(Boolean);
+  assert.equal(backupPaths.length, 1);
+  assert.equal(await readFile(backupPaths[0], "utf8"), "{bad json");
+  const mcpConfig = JSON.parse(await readFile(mcpConfigPath, "utf8"));
+  assert.equal(mcpConfig.servers.goalSystem.type, "stdio");
 
   await rm(home, { recursive: true, force: true });
 });

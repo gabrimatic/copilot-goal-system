@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.16
+
+- Recovers malformed or non-object Copilot and VS Code MCP target config files during install/update by preserving the original as an `*.invalid-backup-*` file, recreating a clean JSON object, and continuing setup.
+- Preserves existing config file permissions when writing backups or replacing target JSON/JSONC files.
+- Adds Marketplace-bundled installer regression coverage for corrupt VS Code MCP config recovery.
+- Documents the recovery behavior for repeated extension reinstall/update flows.
+
 ## 1.1.15
 
 - Fixes Linux CI doctor test isolation for fake VS Code MCP config paths.
