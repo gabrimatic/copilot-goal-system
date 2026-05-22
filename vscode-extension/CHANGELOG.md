@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.15
+
+- Fixes Linux CI doctor test isolation for fake VS Code MCP config paths.
+
 ## 1.1.14
 
 - Fixes installer and helper-script error output so CI and terminal users reliably see the real failure reason.

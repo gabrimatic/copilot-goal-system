@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.15
+
+- Fixes Linux CI doctor tests by isolating fake-home `XDG_CONFIG_HOME` paths before release.
+
 ## 1.1.14
 
 - Fixes the installer and release helper error paths so piped CI output cannot lose the real failure message before exit.
