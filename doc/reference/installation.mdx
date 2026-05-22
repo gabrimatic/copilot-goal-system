@@ -63,6 +63,8 @@ Install both adapters:
 ./install.sh --target all
 ```
 
+If your Copilot CLI profile is not `~/.copilot`, set `COPILOT_HOME` to the full profile directory before running the installer.
+
 Install only the VS Code Chat adapter:
 
 ```bash
@@ -95,7 +97,11 @@ After installing only `vscode-chat`, reload VS Code or run `MCP: Reset Cached To
 | `~/.copilot/settings.json` | Hook entries are merged into existing settings. |
 | `~/.copilot/copilot-instructions.md` | A short goal-system reminder is appended once. |
 
-The installer preserves existing settings. It appends missing goal hooks, leaves unrelated hooks alone, and recognizes existing goal hooks written with `~`, `$HOME`, absolute paths, or wrapper commands. If a composite user hook already runs `goal-context.sh`, the installer keeps that hook and does not add a duplicate direct goal hook. Empty JSON config files are initialized as empty objects; malformed non-empty JSON is refused so existing data is not overwritten.
+The installer preserves existing settings. It appends missing goal hooks, leaves unrelated hooks alone, and recognizes existing goal hooks written with `~`, `$HOME`, `$COPILOT_HOME`, absolute paths, or wrapper commands. If a composite user hook already runs `goal-context.sh`, the installer keeps that hook and does not add a duplicate direct goal hook. Empty JSON or JSONC config files are initialized as empty objects; malformed non-empty JSON/JSONC is refused so existing data is not overwritten.
+
+Copilot CLI `settings.json`, Copilot CLI `mcp-config.json`, and VS Code profile `mcp.json` are handled as JSONC-compatible config files. Comments and trailing commas are accepted, and comments outside the exact updated subtree are preserved while the installer updates `hooks`, `mcpServers.goalSystem`, or `servers.goalSystem`.
+
+Runtime updates are prepared in a temporary directory first. The installer copies the new package, runs `npm ci --omit=dev --ignore-scripts`, and marks runtime entrypoints executable before replacing `~/.copilot/extensions/goal-system/`. If dependency installation fails, the previous runtime remains in place and config files are not changed.
 
 ## Hook entries
 

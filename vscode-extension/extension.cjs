@@ -11,12 +11,14 @@ const {
   runtimeUpdatePromptKey,
   runtimeVersionState,
 } = require("./lib/runtime-version.cjs");
+const { copilotRootForHome } = require("./lib/copilot-paths.cjs");
 const {
   cliMcpServerInstalled,
   countDuplicateGoalHooks,
   findStaleDriftHookEvents,
   hookInstalled,
 } = require("./lib/install-status.cjs");
+const { parseJsoncText } = require("./lib/jsonc-file.cjs");
 
 const DISPLAY_NAME = "Copilot Goal System";
 const DOCS_URL = "https://github.com/gabrimatic/copilot-goal-system#readme";
@@ -108,7 +110,7 @@ function configuredHome() {
 
 function installedPaths() {
   const home = configuredHome();
-  const copilotRoot = path.join(home, ".copilot");
+  const copilotRoot = copilotRootForHome(home);
   const vscodeMcpConfigFile = configuredVscodeMcpConfigPath(home);
   return {
     home,
@@ -167,7 +169,7 @@ async function exists(filePath) {
 
 async function readJson(filePath) {
   const raw = await fsp.readFile(filePath, "utf8");
-  return JSON.parse(raw);
+  return parseJsoncText(raw, filePath);
 }
 
 async function readPackageVersion(filePath) {
@@ -572,6 +574,7 @@ function commandEnv(home) {
   const env = { ...process.env };
   env.HOME = home;
   env.USERPROFILE = home;
+  env.COPILOT_HOME = copilotRootForHome(home, env);
   return env;
 }
 

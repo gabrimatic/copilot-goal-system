@@ -1,43 +1,18 @@
 #!/usr/bin/env node
 import { chmod, cp, mkdir, rm } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const extensionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const projectRoot = path.resolve(extensionRoot, "..");
 const targetRoot = path.join(extensionRoot, "resources", "goal-system");
-
-const entries = [
-  ".github/hooks/goal-system.json",
-  "adapters",
-  "CHANGELOG.md",
-  "CODE_OF_CONDUCT.md",
-  "CONTRIBUTING.md",
-  "LICENSE",
-  "README.md",
-  "SECURITY.md",
-  "SUPPORT.md",
-  "doc",
-  "extension.mjs",
-  "hooks.json",
-  "hooks",
-  "install.sh",
-  "instructions",
-  "lib",
-  "package-lock.json",
-  "package.json",
-  "plugin.json",
-  "scripts",
-  "skills",
-  "tests",
-];
+const require = createRequire(import.meta.url);
+const { isBundledRuntimePath, runtimeEntries } = require("../lib/runtime-bundle.cjs");
 
 function filter(source) {
-  const relative = path.relative(projectRoot, source);
-  if (!relative) return true;
-  const parts = relative.split(path.sep);
-  return !parts.includes("node_modules") && !parts.includes(".git") && !parts.includes("vscode-extension");
+  return isBundledRuntimePath(source, projectRoot);
 }
 
 async function copyEntry(entry) {
@@ -55,7 +30,7 @@ async function main() {
   await rm(targetRoot, { recursive: true, force: true });
   await mkdir(targetRoot, { recursive: true });
 
-  for (const entry of entries) {
+  for (const entry of runtimeEntries) {
     await copyEntry(entry);
   }
 

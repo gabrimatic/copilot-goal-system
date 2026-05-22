@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.9
+
+- Accepts JSONC in Copilot CLI `settings.json`, Copilot CLI `mcp-config.json`, and VS Code profile `mcp.json` during install and doctor checks, matching Copilot CLI's documented config format.
+- Preserves comments outside the exact updated config subtrees while merging goal hooks and MCP server entries.
+- Makes runtime updates transactional by installing production dependencies in a temporary runtime before replacing the existing local runtime.
+- Supports non-default `COPILOT_HOME` profiles in installer paths, hook commands, MCP server environment, and CLI hook state lookup.
+- Adds regression coverage for JSONC install, JSONC doctor status, failed-update rollback, `COPILOT_HOME`, and VS Code MCP JSONC config so Marketplace-bundled installers cannot reject valid commented config again.
+
 ## 1.1.8
 
 - Adds a standard Copilot CLI MCP fallback server at `~/.copilot/mcp-config.json` so `goal_system_*` tools can be available through normal MCP discovery as well as the SDK extension path.

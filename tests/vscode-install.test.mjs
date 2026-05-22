@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
+import { parse as parseJsonc } from "jsonc-parser";
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(".");
@@ -77,6 +78,37 @@ test("installer refuses corrupt VS Code MCP config instead of overwriting it", a
   );
 
   assert.equal(await readFile(mcpConfigPath, "utf8"), "{bad json");
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("installer accepts VS Code MCP JSONC without stripping existing comments", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "goal-vscode-install-jsonc-"));
+  const mcpConfigPath = path.join(home, "Code", "User", "mcp.json");
+  await execFileAsync("mkdir", ["-p", path.dirname(mcpConfigPath)]);
+  await writeFile(
+    mcpConfigPath,
+    `{
+  // VS Code MCP config is commonly edited as JSONC.
+  "servers": {
+    "existingServer": { "type": "stdio", "command": "node", "args": ["existing.mjs"] },
+  },
+}
+`
+  );
+
+  await execFileAsync(process.execPath, [installer, "--target", "vscode-chat", "--vscode-mcp-config", mcpConfigPath], {
+    cwd: root,
+    env: { ...process.env, HOME: home },
+    maxBuffer: 1024 * 1024 * 12,
+  });
+
+  const raw = await readFile(mcpConfigPath, "utf8");
+  assert.match(raw, /VS Code MCP config is commonly edited as JSONC/);
+  const mcpConfig = parseJsonc(raw);
+  assert.equal(mcpConfig.servers.existingServer.command, "node");
+  assert.equal(mcpConfig.servers.goalSystem.type, "stdio");
+  assert.match(mcpConfig.servers.goalSystem.args[0], /mcp-server\.mjs/);
 
   await rm(home, { recursive: true, force: true });
 });

@@ -43,6 +43,12 @@ const rootChangelog = await readText("CHANGELOG.md");
 const vscodeChangelog = await readText("vscode-extension/CHANGELOG.md");
 const rootInstallStatus = await readText("lib/install-status.cjs");
 const vscodeInstallStatus = await readText("vscode-extension/lib/install-status.cjs");
+const rootJsoncFile = await readText("lib/jsonc-file.cjs");
+const vscodeJsoncFile = await readText("vscode-extension/lib/jsonc-file.cjs");
+const rootCopilotPaths = await readText("lib/copilot-paths.cjs");
+const vscodeCopilotPaths = await readText("vscode-extension/lib/copilot-paths.cjs");
+const rootRuntimeBundle = await readText("lib/runtime-bundle.cjs");
+const vscodeRuntimeBundle = await readText("vscode-extension/lib/runtime-bundle.cjs");
 
 if (rootPackage.version !== vscodePackage.version) {
   fail(`Version mismatch: package.json is ${rootPackage.version}, vscode-extension/package.json is ${vscodePackage.version}.`);
@@ -75,4 +81,16 @@ checkChangelog(vscodeChangelog, "vscode-extension/CHANGELOG.md", vscodePackage.v
 
 if (rootInstallStatus !== vscodeInstallStatus) {
   fail("lib/install-status.cjs and vscode-extension/lib/install-status.cjs must stay identical.");
+}
+
+if (rootJsoncFile !== vscodeJsoncFile) {
+  fail("lib/jsonc-file.cjs and vscode-extension/lib/jsonc-file.cjs must stay identical.");
+}
+
+if (rootCopilotPaths !== vscodeCopilotPaths) {
+  fail("lib/copilot-paths.cjs and vscode-extension/lib/copilot-paths.cjs must stay identical.");
+}
+
+if (rootRuntimeBundle !== vscodeRuntimeBundle) {
+  fail("lib/runtime-bundle.cjs and vscode-extension/lib/runtime-bundle.cjs must stay identical.");
 }

@@ -1,14 +1,19 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { chmod, copyFile, cp, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { access, chmod, copyFile, cp, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const require = createRequire(import.meta.url);
+const { parseJsoncText, updateJsoncPath } = require("../lib/jsonc-file.cjs");
+const { isBundledRuntimePath } = require("../lib/runtime-bundle.cjs");
+const { copilotRootForHome } = require("../lib/copilot-paths.cjs");
 const home = os.homedir();
-const copilotRoot = path.join(home, ".copilot");
+const copilotRoot = copilotRootForHome(home);
 const extensionDir = path.join(copilotRoot, "extensions", "goal-system");
 const skillDir = path.join(copilotRoot, "skills", "goal");
 const hookDir = path.join(copilotRoot, "hooks");
@@ -21,23 +26,30 @@ const vscodeAgentPath = path.join(agentDir, "goal-system.agent.md");
 const markerStart = "<!-- copilot-goal-system snippet start -->";
 const markerEnd = "<!-- copilot-goal-system snippet end -->";
 
-const hookEvents = {
-  sessionStart: [{ type: "command", bash: "$HOME/.copilot/hooks/goal-context.sh", timeoutSec: 5 }],
-  userPromptSubmitted: [{ type: "command", bash: "$HOME/.copilot/hooks/goal-context.sh", timeoutSec: 5 }],
-  preCompact: [{ type: "command", bash: "$HOME/.copilot/hooks/goal-context.sh", timeoutSec: 5 }],
-  agentStop: [{ type: "command", bash: "$HOME/.copilot/hooks/goal-context.sh", timeoutSec: 5 }],
-  subagentStart: [{ type: "command", bash: "$HOME/.copilot/hooks/goal-context.sh", timeoutSec: 5 }],
-  subagentStop: [{ type: "command", bash: "$HOME/.copilot/hooks/goal-context.sh", timeoutSec: 5 }],
-  postToolUseFailure: [{ type: "command", bash: "$HOME/.copilot/hooks/goal-context.sh", timeoutSec: 5 }],
-  notification: [
-    {
-      type: "command",
-      bash: "$HOME/.copilot/hooks/goal-context.sh",
-      matcher: "agent_idle|agent_completed",
-      timeoutSec: 5,
-    },
-  ],
-};
+function goalContextCommand() {
+  return copilotRoot === path.join(home, ".copilot") ? "$HOME/.copilot/hooks/goal-context.sh" : "$COPILOT_HOME/hooks/goal-context.sh";
+}
+
+function hookEvents() {
+  const bash = goalContextCommand();
+  return {
+    sessionStart: [{ type: "command", bash, timeoutSec: 5 }],
+    userPromptSubmitted: [{ type: "command", bash, timeoutSec: 5 }],
+    preCompact: [{ type: "command", bash, timeoutSec: 5 }],
+    agentStop: [{ type: "command", bash, timeoutSec: 5 }],
+    subagentStart: [{ type: "command", bash, timeoutSec: 5 }],
+    subagentStop: [{ type: "command", bash, timeoutSec: 5 }],
+    postToolUseFailure: [{ type: "command", bash, timeoutSec: 5 }],
+    notification: [
+      {
+        type: "command",
+        bash,
+        matcher: "agent_idle|agent_completed",
+        timeoutSec: 5,
+      },
+    ],
+  };
+}
 
 function stamp() {
   return new Date().toISOString().replace(/[:.]/g, "-");
@@ -75,18 +87,22 @@ function selectedTargets(target) {
   throw new Error(`Unknown install target "${target}". Use cli, vscode-chat, or all.`);
 }
 
-async function readJsonIfExists(filePath) {
+async function readJsonDocumentIfExists(filePath) {
   try {
     const raw = await readFile(filePath, "utf8");
-    if (!raw.trim()) return {};
-    return JSON.parse(raw);
+    return { raw, value: parseJsoncText(raw, filePath), exists: true };
   } catch (error) {
-    if (error.code === "ENOENT") return {};
-    if (error instanceof SyntaxError) {
-      throw new Error(`${filePath} is not valid JSON. Fix it before installing; that config file was not changed.`);
-    }
+    if (error.code === "ENOENT") return { raw: "{}\n", value: {}, exists: false };
     throw error;
   }
+}
+
+async function readEditableJsonObjectDocument(filePath, description) {
+  const document = await readJsonDocumentIfExists(filePath);
+  if (!document.value || typeof document.value !== "object" || Array.isArray(document.value)) {
+    throw new Error(`${filePath} must contain a JSON object for ${description}. That config file was not changed.`);
+  }
+  return document;
 }
 
 async function writeTextAtomic(filePath, text, options = {}) {
@@ -114,6 +130,15 @@ async function sameFilesystemPath(left, right) {
     realpath(right).catch(() => path.resolve(right)),
   ]);
   return leftReal === rightReal;
+}
+
+async function exists(filePath) {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function defaultVscodeMcpConfigPath() {
@@ -145,22 +170,26 @@ function quoteTrimmed(value) {
 
 function normalizeDirectGoalCommand(value) {
   let text = quoteTrimmed(value);
-  if (text === "~/.copilot/hooks/goal-context.sh") return "$HOME/.copilot/hooks/goal-context.sh";
-  if (text === "${HOME}/.copilot/hooks/goal-context.sh") return "$HOME/.copilot/hooks/goal-context.sh";
-  if (text === path.join(home, ".copilot", "hooks", "goal-context.sh")) return "$HOME/.copilot/hooks/goal-context.sh";
+  if (text === "~/.copilot/hooks/goal-context.sh") return goalContextCommand();
+  if (text === "$HOME/.copilot/hooks/goal-context.sh") return goalContextCommand();
+  if (text === "${HOME}/.copilot/hooks/goal-context.sh") return goalContextCommand();
+  if (text === "$COPILOT_HOME/hooks/goal-context.sh") return goalContextCommand();
+  if (text === "${COPILOT_HOME}/hooks/goal-context.sh") return goalContextCommand();
+  if (text === path.join(home, ".copilot", "hooks", "goal-context.sh")) return goalContextCommand();
+  if (text === path.join(copilotRoot, "hooks", "goal-context.sh")) return goalContextCommand();
   return text;
 }
 
 function isGoalContextHook(hook) {
   const text = hookCommandText(hook);
-  return /(?:^|[\s"'`])(?:~|\$HOME|\$\{HOME\}|[^\s"'`]+)\/\.copilot\/hooks\/goal-context\.sh(?:$|[\s"'`])/.test(text);
+  return /(?:^|[\s"'`])(?:(?:~|\$HOME|\$\{HOME\})\/\.copilot|\$COPILOT_HOME|\$\{COPILOT_HOME\}|[^\s"'`]+)\/hooks\/goal-context\.sh(?:$|[\s"'`])/.test(text);
 }
 
 function isDirectGoalContextHook(hook) {
   if (!hook || hook.type !== "command") return false;
   const fields = [hook.bash, hook.command, hook.windows].filter(Boolean);
   if (fields.length !== 1) return false;
-  return normalizeDirectGoalCommand(fields[0]) === "$HOME/.copilot/hooks/goal-context.sh";
+  return normalizeDirectGoalCommand(fields[0]) === goalContextCommand();
 }
 
 function isGoalSystemOwnedHook(hook) {
@@ -176,18 +205,12 @@ function removeStaleCliDriftHooks(settings) {
 
 async function mergeSettingsHooks() {
   await mkdir(copilotRoot, { recursive: true });
-  let originalSettings = null;
-  try {
-    originalSettings = await readFile(settingsPath, "utf8");
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-  }
-
-  const settings = await readJsonIfExists(settingsPath);
+  const settingsDocument = await readEditableJsonObjectDocument(settingsPath, "Copilot CLI settings");
+  const settings = settingsDocument.value;
   settings.hooks = settings.hooks && typeof settings.hooks === "object" ? settings.hooks : {};
   removeStaleCliDriftHooks(settings);
 
-  for (const [eventName, goalHooks] of Object.entries(hookEvents)) {
+  for (const [eventName, goalHooks] of Object.entries(hookEvents())) {
     const existing = Array.isArray(settings.hooks[eventName]) ? settings.hooks[eventName] : [];
     const hasCompositeGoalHook = existing.some((hook) => isGoalContextHook(hook) && !isDirectGoalContextHook(hook));
     const merged = [];
@@ -217,26 +240,32 @@ async function mergeSettingsHooks() {
     settings.hooks[eventName] = merged;
   }
 
-  await writeTextAtomic(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
+  await writeTextAtomic(settingsPath, updateJsoncPath(settingsDocument.raw, ["hooks"], settings.hooks));
 }
 
 async function installCliMcpServer() {
-  const mcpConfig = await readJsonIfExists(cliMcpConfigPath);
+  const mcpDocument = await readEditableJsonObjectDocument(cliMcpConfigPath, "Copilot CLI MCP config");
+  const mcpConfig = mcpDocument.value;
+  const hadMcpServersObject = mcpConfig.mcpServers && typeof mcpConfig.mcpServers === "object" && !Array.isArray(mcpConfig.mcpServers);
   mcpConfig.mcpServers =
-    mcpConfig.mcpServers && typeof mcpConfig.mcpServers === "object" && !Array.isArray(mcpConfig.mcpServers)
-      ? mcpConfig.mcpServers
-      : {};
-  mcpConfig.mcpServers.goalSystem = {
+    hadMcpServersObject ? mcpConfig.mcpServers : {};
+  const serverConfig = {
     type: "local",
     command: process.execPath,
     args: [path.join(extensionDir, "adapters", "vscode-chat", "mcp-server.mjs")],
     env: {
       GOAL_SYSTEM_ADAPTER: "copilot-cli-mcp",
+      COPILOT_HOME: copilotRoot,
+      GOAL_SYSTEM_STATE_ROOT: path.join(copilotRoot, "session-state", "goal-system"),
     },
     tools: ["*"],
   };
+  mcpConfig.mcpServers.goalSystem = serverConfig;
 
-  await writeTextAtomic(cliMcpConfigPath, `${JSON.stringify(mcpConfig, null, 2)}\n`);
+  await writeTextAtomic(
+    cliMcpConfigPath,
+    updateJsoncPath(mcpDocument.raw, hadMcpServersObject ? ["mcpServers", "goalSystem"] : ["mcpServers"], hadMcpServersObject ? serverConfig : mcpConfig.mcpServers)
+  );
 }
 
 async function appendInstructionsSnippet() {
@@ -259,23 +288,42 @@ async function installFiles() {
   await mkdir(path.dirname(extensionDir), { recursive: true });
   if (!(await sameFilesystemPath(root, extensionDir))) {
     const tempExtensionDir = path.join(path.dirname(extensionDir), `.goal-system-install-${process.pid}-${Date.now()}`);
+    const previousExtensionDir = path.join(path.dirname(extensionDir), `.goal-system-previous-${process.pid}-${Date.now()}`);
+    let previousMoved = false;
+    let tempInstalled = false;
     try {
       await cp(root, tempExtensionDir, {
         recursive: true,
         force: true,
         filter: (source) => {
           const relative = path.relative(root, source);
-          if (!relative) return true;
-          const parts = relative.split(path.sep);
-          return !parts.includes("node_modules") && !parts.includes(".git") && !parts.includes("dist") && !parts.includes("vscode-extension");
+          if (relative === "vscode-extension") return false;
+          return isBundledRuntimePath(source, root);
         },
       });
-      await rm(extensionDir, { recursive: true, force: true });
+      installDependencies(tempExtensionDir);
+      await chmodRuntimeExecutables(tempExtensionDir);
+      if (await exists(extensionDir)) {
+        await rename(extensionDir, previousExtensionDir);
+        previousMoved = true;
+      }
       await rename(tempExtensionDir, extensionDir);
+      tempInstalled = true;
+      if (previousMoved) {
+        await rm(previousExtensionDir, { recursive: true, force: true }).catch(() => {});
+      }
     } catch (error) {
-      await rm(tempExtensionDir, { recursive: true, force: true }).catch(() => {});
+      if (!tempInstalled) {
+        await rm(tempExtensionDir, { recursive: true, force: true }).catch(() => {});
+      }
+      if (previousMoved && !(await exists(extensionDir))) {
+        await rename(previousExtensionDir, extensionDir).catch(() => {});
+      }
       throw error;
     }
+  } else {
+    installDependencies(extensionDir);
+    await chmodRuntimeExecutables(extensionDir);
   }
 
   await mkdir(skillDir, { recursive: true });
@@ -284,20 +332,22 @@ async function installFiles() {
 
   await copyFile(path.join(root, "skills", "goal", "SKILL.md"), path.join(skillDir, "SKILL.md"));
   await copyFile(path.join(root, "hooks", "goal-context.sh"), path.join(hookDir, "goal-context.sh"));
+  await chmod(path.join(hookDir, "goal-context.sh"), fsConstants.S_IRWXU | fsConstants.S_IRGRP | fsConstants.S_IXGRP | fsConstants.S_IROTH | fsConstants.S_IXOTH);
+}
 
+async function chmodRuntimeExecutables(runtimeDir) {
   const executableFiles = [
-    path.join(hookDir, "goal-context.sh"),
-    path.join(extensionDir, "adapters", "vscode-chat", "hook-runner.mjs"),
-    path.join(extensionDir, "adapters", "vscode-chat", "mcp-server.mjs"),
+    path.join(runtimeDir, "adapters", "vscode-chat", "hook-runner.mjs"),
+    path.join(runtimeDir, "adapters", "vscode-chat", "mcp-server.mjs"),
   ];
   for (const filePath of executableFiles) {
     await chmod(filePath, fsConstants.S_IRWXU | fsConstants.S_IRGRP | fsConstants.S_IXGRP | fsConstants.S_IROTH | fsConstants.S_IXOTH);
   }
 }
 
-function installDependencies() {
+function installDependencies(runtimeDir) {
   const result = spawnSync("npm", ["ci", "--omit=dev", "--ignore-scripts"], {
-    cwd: extensionDir,
+    cwd: runtimeDir,
     stdio: "inherit",
   });
 
@@ -306,7 +356,7 @@ function installDependencies() {
   }
 
   if (result.status !== 0) {
-    throw new Error(`npm ci failed in ${extensionDir}`);
+    throw new Error(`npm ci failed in ${runtimeDir}`);
   }
 }
 
@@ -318,28 +368,36 @@ async function installVscodeChatAdapter() {
   await writeTextAtomic(vscodeAgentPath, agent.endsWith("\n") ? agent : `${agent}\n`);
 
   const mcpConfigPath = defaultVscodeMcpConfigPath();
-  const mcpConfig = await readJsonIfExists(mcpConfigPath);
-  mcpConfig.servers = mcpConfig.servers && typeof mcpConfig.servers === "object" && !Array.isArray(mcpConfig.servers) ? mcpConfig.servers : {};
-  mcpConfig.servers.goalSystem = {
+  const mcpDocument = await readEditableJsonObjectDocument(mcpConfigPath, "VS Code MCP config");
+  const mcpConfig = mcpDocument.value;
+  const hadServersObject = mcpConfig.servers && typeof mcpConfig.servers === "object" && !Array.isArray(mcpConfig.servers);
+  mcpConfig.servers = hadServersObject ? mcpConfig.servers : {};
+  const serverConfig = {
     type: "stdio",
     command: process.execPath,
     args: [path.join(extensionDir, "adapters", "vscode-chat", "mcp-server.mjs")],
     env: {
       GOAL_SYSTEM_ADAPTER: "vscode-chat",
+      COPILOT_HOME: copilotRoot,
+      GOAL_SYSTEM_STATE_ROOT: path.join(copilotRoot, "session-state", "goal-system"),
     },
   };
+  mcpConfig.servers.goalSystem = serverConfig;
 
-  await writeTextAtomic(mcpConfigPath, `${JSON.stringify(mcpConfig, null, 2)}\n`);
+  await writeTextAtomic(
+    mcpConfigPath,
+    updateJsoncPath(mcpDocument.raw, hadServersObject ? ["servers", "goalSystem"] : ["servers"], hadServersObject ? serverConfig : mcpConfig.servers)
+  );
   return mcpConfigPath;
 }
 
 async function preflightTargetConfigFiles(targets) {
   if (targets.has("cli")) {
-    await readJsonIfExists(settingsPath);
-    await readJsonIfExists(cliMcpConfigPath);
+    await readEditableJsonObjectDocument(settingsPath, "Copilot CLI settings");
+    await readEditableJsonObjectDocument(cliMcpConfigPath, "Copilot CLI MCP config");
   }
   if (targets.has("vscode-chat")) {
-    await readJsonIfExists(defaultVscodeMcpConfigPath());
+    await readEditableJsonObjectDocument(defaultVscodeMcpConfigPath(), "VS Code MCP config");
   }
 }
 
@@ -347,7 +405,6 @@ async function main() {
   const targets = selectedTargets(options.target);
   await preflightTargetConfigFiles(targets);
   await installFiles();
-  installDependencies();
 
   let vscodeMcpConfigPath = "";
   if (targets.has("cli")) {

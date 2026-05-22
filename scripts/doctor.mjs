@@ -14,6 +14,8 @@ const {
   findStaleDriftHookEvents,
   hookInstalled,
 } = require("../lib/install-status.cjs");
+const { parseJsoncText } = require("../lib/jsonc-file.cjs");
+const { copilotRootForHome } = require("../lib/copilot-paths.cjs");
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
@@ -76,8 +78,7 @@ async function exists(filePath) {
 async function readJsonIfExists(filePath) {
   try {
     const raw = await readFile(filePath, "utf8");
-    if (!raw.trim()) return { value: {}, exists: true };
-    return { value: JSON.parse(raw), exists: true };
+    return { value: parseJsoncText(raw, filePath), exists: true };
   } catch (error) {
     if (error.code === "ENOENT") return { value: null, exists: false };
     return { value: null, exists: true, error: error.message || String(error) };
@@ -135,7 +136,7 @@ function vscodeMcpServerDetails(config, options = {}) {
 }
 
 function profileEnv(home) {
-  return { ...process.env, HOME: home, USERPROFILE: home, COPILOT_HOME: path.join(home, ".copilot") };
+  return { ...process.env, HOME: home, USERPROFILE: home, COPILOT_HOME: copilotRootForHome(home) };
 }
 
 function mcpConfigSelfTest(details, home) {
@@ -149,7 +150,7 @@ function mcpConfigSelfTest(details, home) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const copilotRoot = path.join(options.home, ".copilot");
+  const copilotRoot = copilotRootForHome(options.home);
   const extensionDir = path.join(copilotRoot, "extensions", "goal-system");
   const settingsPath = path.join(copilotRoot, "settings.json");
   const cliMcpConfigPath = path.join(copilotRoot, "mcp-config.json");

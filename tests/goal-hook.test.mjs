@@ -151,6 +151,32 @@ test("userPromptSubmitted creates a CLI draft goal on explicit goal activation",
   await rm(home, { recursive: true, force: true });
 });
 
+test("CLI hook stores goal state under COPILOT_HOME when configured", async () => {
+  const home = path.join(tmpdir(), `goal-hook-${process.pid}-copilot-home`);
+  const copilotHome = path.join(home, "custom-copilot");
+  const cwd = path.join(home, "project");
+  await mkdir(cwd, { recursive: true });
+
+  const result = await runHook(
+    {
+      sessionId: "session-custom-home",
+      timestamp: Date.now(),
+      cwd,
+      prompt: "/goal verify custom profile updates",
+    },
+    { HOME: home, COPILOT_HOME: copilotHome }
+  );
+
+  const parsed = JSON.parse(result.stdout);
+  assert.match(parsed.additionalContext, /persisted draft goal was created/i);
+
+  const goal = JSON.parse(await readFile(path.join(copilotHome, "session-state", "goal-system", "by-session", "session-custom-home.json"), "utf8"));
+  assert.equal(goal.objective, "verify custom profile updates");
+  await assert.rejects(readFile(path.join(home, ".copilot", "session-state", "goal-system", "by-session", "session-custom-home.json"), "utf8"), /ENOENT/);
+
+  await rm(home, { recursive: true, force: true });
+});
+
 test("agentStop blocks a premature stop while an active goal is still open", async () => {
   const home = path.join(tmpdir(), `goal-hook-${process.pid}-agentstop`);
   const cwd = path.join(home, "project");

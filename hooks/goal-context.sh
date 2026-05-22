@@ -122,12 +122,13 @@ now_iso() {
   date -u +"%Y-%m-%dT%H:%M:%S.000Z"
 }
 
+copilot_home="${COPILOT_HOME:-$HOME/.copilot}"
 normalized_cwd=$(normalize_path "$cwd")
 safe_sid=$(safe_session_id "$session_id")
 [[ -z "$safe_sid" ]] && exit 0
 
-state_root="$HOME/.copilot/session-state/goal-system"
-workspace_goal_path="$HOME/.copilot/session-state/${safe_sid}/goal-state.json"
+state_root="$copilot_home/session-state/goal-system"
+workspace_goal_path="$copilot_home/session-state/${safe_sid}/goal-state.json"
 session_goal_path="$state_root/by-session/${safe_sid}.json"
 cwd_goal_path="$state_root/by-cwd-session/$(hash_cwd "$normalized_cwd")--${safe_sid}.json"
 

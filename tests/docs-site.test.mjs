@@ -1,11 +1,14 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 
 const root = path.resolve(import.meta.dirname, "..");
 const pagesUrl = "https://gabrimatic.github.io/copilot-goal-system/";
+const require = createRequire(import.meta.url);
+const { runtimeEntries } = require("../lib/runtime-bundle.cjs");
 
 test("Mintlify docs live in doc and legacy docs source is gone", () => {
   assert.equal(existsSync(path.join(root, "docs")), false);
@@ -63,6 +66,7 @@ test("Docs Pages workflow owns docs deploys and full CI ignores docs-only change
   }
 
   assert.doesNotMatch(ciWorkflow, /paths-ignore:[\s\S]*-\s+"install\.sh"/);
-  assert.match(prepareBundle, /"doc"/);
+  assert.equal(runtimeEntries.includes("doc"), true);
+  assert.equal(runtimeEntries.includes("docs"), false);
   assert.doesNotMatch(prepareBundle, /"docs"/);
 });

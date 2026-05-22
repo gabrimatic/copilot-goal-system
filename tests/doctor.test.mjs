@@ -11,6 +11,10 @@ const root = path.resolve(".");
 const installer = path.join(root, "scripts", "install.mjs");
 const doctor = path.join(root, "scripts", "doctor.mjs");
 
+function withTopLevelJsoncComment(raw, comment) {
+  return raw.replace("{", `{\n  // ${comment}`).replace(/\n}\s*$/, ",\n}\n");
+}
+
 test("doctor reports a healthy all-target install with CLI MCP fallback", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "goal-doctor-"));
   const fakeBin = path.join(home, "bin");
@@ -51,6 +55,74 @@ test("doctor reports a healthy all-target install with CLI MCP fallback", async 
 
   const cliMcpConfig = JSON.parse(await readFile(path.join(home, ".copilot", "mcp-config.json"), "utf8"));
   assert.equal(cliMcpConfig.mcpServers.goalSystem.type, "local");
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("doctor accepts JSONC Copilot and VS Code config files", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "goal-doctor-jsonc-"));
+  const fakeBin = path.join(home, "bin");
+  await mkdir(fakeBin, { recursive: true });
+  const fakeCopilot = path.join(fakeBin, "copilot");
+  await writeFile(fakeCopilot, "#!/usr/bin/env bash\nprintf 'GitHub Copilot CLI 1.0.45.\\n'\n");
+  await chmod(fakeCopilot, 0o755);
+
+  const env = { ...process.env, HOME: home, PATH: `${fakeBin}:${process.env.PATH || ""}` };
+  await execFileAsync(process.execPath, [installer, "--target", "all"], {
+    cwd: root,
+    env,
+    maxBuffer: 1024 * 1024 * 12,
+  });
+
+  const settingsPath = path.join(home, ".copilot", "settings.json");
+  const cliMcpConfigPath = path.join(home, ".copilot", "mcp-config.json");
+  const vscodeMcpConfigPath = path.join(home, "Library", "Application Support", "Code", "User", "mcp.json");
+  await writeFile(settingsPath, withTopLevelJsoncComment(await readFile(settingsPath, "utf8"), "settings remain valid JSONC"));
+  await writeFile(cliMcpConfigPath, withTopLevelJsoncComment(await readFile(cliMcpConfigPath, "utf8"), "CLI MCP remains valid JSONC"));
+  await writeFile(vscodeMcpConfigPath, withTopLevelJsoncComment(await readFile(vscodeMcpConfigPath, "utf8"), "VS Code MCP remains valid JSONC"));
+
+  const { stdout } = await execFileAsync(process.execPath, [doctor, "--home", home, "--target", "all", "--json"], {
+    cwd: root,
+    env,
+    maxBuffer: 1024 * 1024 * 4,
+  });
+
+  const report = JSON.parse(stdout);
+  assert.equal(report.ok, true);
+  assert.equal(report.checks.find((item) => item.label === "CLI settings JSON").ok, true);
+  assert.equal(report.checks.find((item) => item.label === "Copilot CLI MCP goal server").ok, true);
+  assert.equal(report.checks.find((item) => item.label === "VS Code MCP goal server").ok, true);
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("doctor honors COPILOT_HOME for non-default Copilot profiles", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "goal-doctor-copilot-home-"));
+  const copilotHome = path.join(home, "custom-copilot-profile");
+  const fakeBin = path.join(home, "bin");
+  await mkdir(fakeBin, { recursive: true });
+  const fakeCopilot = path.join(fakeBin, "copilot");
+  await writeFile(fakeCopilot, "#!/usr/bin/env bash\nprintf 'GitHub Copilot CLI 1.0.45.\\n'\n");
+  await chmod(fakeCopilot, 0o755);
+
+  const env = { ...process.env, HOME: home, COPILOT_HOME: copilotHome, PATH: `${fakeBin}:${process.env.PATH || ""}` };
+  await execFileAsync(process.execPath, [installer, "--target", "cli"], {
+    cwd: root,
+    env,
+    maxBuffer: 1024 * 1024 * 12,
+  });
+
+  const { stdout } = await execFileAsync(process.execPath, [doctor, "--home", home, "--target", "cli", "--json"], {
+    cwd: root,
+    env,
+    maxBuffer: 1024 * 1024 * 4,
+  });
+
+  const report = JSON.parse(stdout);
+  assert.equal(report.ok, true);
+  assert.equal(report.paths.copilotRoot, copilotHome);
+  assert.equal(report.paths.settingsPath, path.join(copilotHome, "settings.json"));
+  assert.equal(report.checks.find((item) => item.label === "Installed runtime package").details, "1.1.9");
 
   await rm(home, { recursive: true, force: true });
 });

@@ -133,9 +133,10 @@ For VS Code Copilot Chat, the installer:
 3. Adds the `goalSystem` stdio MCP server to the VS Code profile `mcp.json`.
 4. Reuses the same package under `~/.copilot/extensions/goal-system/`.
 
-The installer preserves existing settings and writes backups before changing JSON or Markdown files.
-During updates, it recognizes existing goal hooks written with `~`, `$HOME`, absolute paths, or wrapper commands. If a composite hook already runs `goal-context.sh`, the installer keeps that hook and avoids adding a duplicate direct goal hook.
-During updates, the installer swaps the installed runtime directory with a fresh package snapshot instead of overlaying files.
+The installer preserves existing settings and writes backups before changing JSON, JSONC, or Markdown files.
+Copilot CLI `settings.json`, Copilot CLI `mcp-config.json`, and VS Code profile `mcp.json` may contain comments and trailing commas; the installer accepts those files and keeps comments outside the exact config subtree it updates.
+During updates, it recognizes existing goal hooks written with `~`, `$HOME`, `$COPILOT_HOME`, absolute paths, or wrapper commands. If a composite hook already runs `goal-context.sh`, the installer keeps that hook and avoids adding a duplicate direct goal hook.
+During updates, the installer prepares a fresh runtime and production dependencies in a temporary directory before replacing the installed runtime, so failed dependency installs leave the previous runtime in place.
 
 Run a local host health check any time the system feels off:
 

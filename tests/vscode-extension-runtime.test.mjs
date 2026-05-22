@@ -83,6 +83,8 @@ test("runtimeUpdatePromptKey is stable and scoped to home plus bundled version",
 
 test("install status recognizes direct and composite goal hook commands", () => {
   assert.equal(isGoalContextHook({ type: "command", bash: "$HOME/.copilot/hooks/goal-context.sh" }), true);
+  assert.equal(isGoalContextHook({ type: "command", bash: "$COPILOT_HOME/hooks/goal-context.sh" }), true);
+  assert.equal(isGoalContextHook({ type: "command", bash: "/tmp/custom-copilot/hooks/goal-context.sh" }), true);
   assert.equal(isGoalContextHook({ type: "command", bash: "~/.copilot/hooks/goal-context.sh" }), true);
   assert.equal(
     isGoalContextHook({
