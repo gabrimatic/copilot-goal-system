@@ -27,6 +27,17 @@ function defaultVscodeMcpConfigPath(home) {
   return path.join(home, ".config", "Code", "User", "mcp.json");
 }
 
+function isolatedEnv(home, fakeBin, extra = {}) {
+  return {
+    ...process.env,
+    HOME: home,
+    USERPROFILE: home,
+    XDG_CONFIG_HOME: path.join(home, ".config"),
+    PATH: `${fakeBin}:${process.env.PATH || ""}`,
+    ...extra,
+  };
+}
+
 test("doctor reports a healthy all-target install with CLI MCP fallback", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "goal-doctor-"));
   const fakeBin = path.join(home, "bin");
@@ -35,7 +46,7 @@ test("doctor reports a healthy all-target install with CLI MCP fallback", async 
   await writeFile(fakeCopilot, "#!/usr/bin/env bash\nprintf 'GitHub Copilot CLI 1.0.45.\\n'\n");
   await chmod(fakeCopilot, 0o755);
 
-  const env = { ...process.env, HOME: home, PATH: `${fakeBin}:${process.env.PATH || ""}` };
+  const env = isolatedEnv(home, fakeBin);
   await execFileAsync(process.execPath, [installer, "--target", "all"], {
     cwd: root,
     env,
@@ -79,7 +90,7 @@ test("doctor accepts JSONC Copilot and VS Code config files", async () => {
   await writeFile(fakeCopilot, "#!/usr/bin/env bash\nprintf 'GitHub Copilot CLI 1.0.45.\\n'\n");
   await chmod(fakeCopilot, 0o755);
 
-  const env = { ...process.env, HOME: home, PATH: `${fakeBin}:${process.env.PATH || ""}` };
+  const env = isolatedEnv(home, fakeBin);
   await execFileAsync(process.execPath, [installer, "--target", "all"], {
     cwd: root,
     env,
@@ -117,7 +128,7 @@ test("doctor honors explicit VS Code MCP config paths", async () => {
   await writeFile(fakeCopilot, "#!/usr/bin/env bash\nprintf 'GitHub Copilot CLI 1.0.45.\\n'\n");
   await chmod(fakeCopilot, 0o755);
 
-  const env = { ...process.env, HOME: home, PATH: `${fakeBin}:${process.env.PATH || ""}` };
+  const env = isolatedEnv(home, fakeBin);
   await execFileAsync(process.execPath, [installer, "--target", "all", "--vscode-mcp-config", vscodeMcpConfigPath], {
     cwd: root,
     env,
@@ -147,7 +158,7 @@ test("doctor honors COPILOT_HOME for non-default Copilot profiles", async () => 
   await writeFile(fakeCopilot, "#!/usr/bin/env bash\nprintf 'GitHub Copilot CLI 1.0.45.\\n'\n");
   await chmod(fakeCopilot, 0o755);
 
-  const env = { ...process.env, HOME: home, COPILOT_HOME: copilotHome, PATH: `${fakeBin}:${process.env.PATH || ""}` };
+  const env = isolatedEnv(home, fakeBin, { COPILOT_HOME: copilotHome });
   await execFileAsync(process.execPath, [installer, "--target", "cli"], {
     cwd: root,
     env,
@@ -177,7 +188,7 @@ test("doctor can scope health checks to CLI-only installs", async () => {
   await writeFile(fakeCopilot, "#!/usr/bin/env bash\nprintf 'GitHub Copilot CLI 1.0.45.\\n'\n");
   await chmod(fakeCopilot, 0o755);
 
-  const env = { ...process.env, HOME: home, PATH: `${fakeBin}:${process.env.PATH || ""}` };
+  const env = isolatedEnv(home, fakeBin);
   await execFileAsync(process.execPath, [installer, "--target", "cli"], {
     cwd: root,
     env,
@@ -206,7 +217,7 @@ test("doctor fails stale CLI MCP config paths instead of self-testing the expect
   await writeFile(fakeCopilot, "#!/usr/bin/env bash\nprintf 'GitHub Copilot CLI 1.0.45.\\n'\n");
   await chmod(fakeCopilot, 0o755);
 
-  const env = { ...process.env, HOME: home, PATH: `${fakeBin}:${process.env.PATH || ""}` };
+  const env = isolatedEnv(home, fakeBin);
   await execFileAsync(process.execPath, [installer, "--target", "cli"], {
     cwd: root,
     env,
