@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.10
+
+- Completes installer update hardening with shared Copilot profile-root resolution across install, doctor, and VS Code status/update paths.
+- Refuses parseable but non-object config files before replacing the installed runtime.
+- Uses the same runtime allowlist for local installs and VS Code Marketplace bundles so unrelated repository artifacts cannot leak into installed runtime snapshots.
+
 ## 1.1.9
 
 - Accepts JSONC in Copilot CLI `settings.json`, Copilot CLI `mcp-config.json`, and VS Code profile `mcp.json` during install and doctor checks, matching Copilot CLI's documented config format.

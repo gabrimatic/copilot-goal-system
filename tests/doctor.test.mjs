@@ -10,6 +10,7 @@ const execFileAsync = promisify(execFile);
 const root = path.resolve(".");
 const installer = path.join(root, "scripts", "install.mjs");
 const doctor = path.join(root, "scripts", "doctor.mjs");
+const rootPackage = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
 
 function withTopLevelJsoncComment(raw, comment) {
   return raw.replace("{", `{\n  // ${comment}`).replace(/\n}\s*$/, ",\n}\n");
@@ -122,7 +123,7 @@ test("doctor honors COPILOT_HOME for non-default Copilot profiles", async () => 
   assert.equal(report.ok, true);
   assert.equal(report.paths.copilotRoot, copilotHome);
   assert.equal(report.paths.settingsPath, path.join(copilotHome, "settings.json"));
-  assert.equal(report.checks.find((item) => item.label === "Installed runtime package").details, "1.1.9");
+  assert.equal(report.checks.find((item) => item.label === "Installed runtime package").details, rootPackage.version);
 
   await rm(home, { recursive: true, force: true });
 });

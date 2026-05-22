@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.10
+
+- Uses one Copilot profile-root resolver across install, status, doctor, and bundled update paths.
+- Refuses non-object config files before replacing the installed local runtime.
+- Uses the shared runtime allowlist for both local installs and Marketplace bundles.
+
 ## 1.1.9
 
 - Accepts JSONC in Copilot CLI and VS Code MCP config files during install and status checks.
