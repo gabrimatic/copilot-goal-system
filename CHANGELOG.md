@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.11
+
+- Fixes the doctor JSONC regression test to use the platform-specific VS Code MCP config path, matching Linux CI and macOS local installs.
+
 ## 1.1.10
 
 - Completes installer update hardening with shared Copilot profile-root resolution across install, doctor, and VS Code status/update paths.

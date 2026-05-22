@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.11
+
+- Fixes platform-specific doctor regression coverage for VS Code MCP config paths.
+
 ## 1.1.10
 
 - Uses one Copilot profile-root resolver across install, status, doctor, and bundled update paths.

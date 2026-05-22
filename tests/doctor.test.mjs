@@ -16,6 +16,16 @@ function withTopLevelJsoncComment(raw, comment) {
   return raw.replace("{", `{\n  // ${comment}`).replace(/\n}\s*$/, ",\n}\n");
 }
 
+function defaultVscodeMcpConfigPath(home) {
+  if (process.platform === "win32") {
+    return path.join(process.env.APPDATA || path.join(home, "AppData", "Roaming"), "Code", "User", "mcp.json");
+  }
+  if (process.platform === "darwin") {
+    return path.join(home, "Library", "Application Support", "Code", "User", "mcp.json");
+  }
+  return path.join(home, ".config", "Code", "User", "mcp.json");
+}
+
 test("doctor reports a healthy all-target install with CLI MCP fallback", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "goal-doctor-"));
   const fakeBin = path.join(home, "bin");
@@ -77,7 +87,7 @@ test("doctor accepts JSONC Copilot and VS Code config files", async () => {
 
   const settingsPath = path.join(home, ".copilot", "settings.json");
   const cliMcpConfigPath = path.join(home, ".copilot", "mcp-config.json");
-  const vscodeMcpConfigPath = path.join(home, "Library", "Application Support", "Code", "User", "mcp.json");
+  const vscodeMcpConfigPath = defaultVscodeMcpConfigPath(home);
   await writeFile(settingsPath, withTopLevelJsoncComment(await readFile(settingsPath, "utf8"), "settings remain valid JSONC"));
   await writeFile(cliMcpConfigPath, withTopLevelJsoncComment(await readFile(cliMcpConfigPath, "utf8"), "CLI MCP remains valid JSONC"));
   await writeFile(vscodeMcpConfigPath, withTopLevelJsoncComment(await readFile(vscodeMcpConfigPath, "utf8"), "VS Code MCP remains valid JSONC"));
