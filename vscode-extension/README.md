@@ -75,7 +75,7 @@ Make this project pass its test suite. Inspect first, fix every in-scope issue, 
 - Node.js 20 or newer on `PATH`
 - GitHub Copilot CLI for CLI mode
 - VS Code Copilot Chat with hooks and MCP enabled for VS Code Chat mode
-- A bash-compatible shell for the CLI hook helper
+- A bash-compatible shell and `jq` for the CLI hook helper
 
 The installer uses your current OS account's home directory by default. Set `copilotGoalSystem.homeOverride` when you need to install into a different local profile. Set `copilotGoalSystem.vscodeMcpConfigPathOverride` only when your VS Code MCP config lives outside the detected profile path.
 

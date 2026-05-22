@@ -16,7 +16,7 @@ It gives GitHub Copilot CLI and VS Code Copilot Chat local goal state, lifecycle
 
 ## Quick start
 
-Runtime: **Node.js >= 20** and either **GitHub Copilot CLI** or **VS Code Copilot Chat**.
+Runtime: **Node.js >= 20** and either **GitHub Copilot CLI** or **VS Code Copilot Chat**. CLI hook mode also needs a bash-compatible shell and `jq`.
 
 ### VS Code
 

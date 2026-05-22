@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.13
+
+- Installs `jq` in CI and publish workflows so Linux release checks cover CLI hook behavior.
+- Documents `jq` as required for CLI hook mode.
+- Reports missing `jq` in doctor output.
+
 ## 1.1.12
 
 - Makes installer/update release checks less dependent on host package-manager/network behavior.

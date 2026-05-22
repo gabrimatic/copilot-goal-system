@@ -30,6 +30,7 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             vscode-extension/package-lock.json
+      - run: sudo apt-get update && sudo apt-get install -y jq
       - run: npm ci
       - run: npm run verify
       - run: npm --prefix vscode-extension ci

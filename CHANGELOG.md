@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.13
+
+- Installs `jq` in CI and Marketplace publish workflows so Linux release checks exercise the CLI hook helper instead of silently skipping it.
+- Documents `jq` as a CLI hook dependency alongside the bash shell requirement.
+- Reports missing `jq` in doctor output instead of leaving CLI hook parsing as an invisible no-op.
+
 ## 1.1.12
 
 - Makes release verification deterministic by avoiding repeated live `npm ci` calls inside installer and doctor regression tests while keeping explicit failed-update rollback coverage.

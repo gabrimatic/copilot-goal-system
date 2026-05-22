@@ -169,6 +169,7 @@ async function main() {
   const vscodeMcpConfig = await readJsonIfExists(vscodeMcpConfigPath);
   const installedPackage = await readJsonIfExists(path.join(extensionDir, "package.json"));
   const copilotVersion = run("copilot", ["--version"], { env: profileEnv(options.home) });
+  const jqVersion = run("jq", ["--version"], { env: profileEnv(options.home) });
   const cliMcpDetails = cliMcpServerDetails(cliMcpConfig.value, { home: options.home, expectedScriptPath: mcpServerPath });
   const vscodeMcpDetails = vscodeMcpServerDetails(vscodeMcpConfig.value, { home: options.home, expectedScriptPath: mcpServerPath });
   const cliMcpSelfTest = mcpConfigSelfTest(cliMcpDetails, options.home);
@@ -183,6 +184,7 @@ async function main() {
     check("Installed runtime package", installedPackage.value?.version === packageJson.version, installedPackage.value?.version || "missing", "Run ./install.sh --target cli."),
     check("Goal skill file", await exists(path.join(copilotRoot, "skills", "goal", "SKILL.md")), path.join(copilotRoot, "skills", "goal", "SKILL.md"), "Run ./install.sh --target cli."),
     check("CLI hook helper", await exists(path.join(copilotRoot, "hooks", "goal-context.sh")), path.join(copilotRoot, "hooks", "goal-context.sh"), "Run ./install.sh --target cli."),
+    check("CLI hook parser dependency", jqVersion.ok, jqVersion.stdout || jqVersion.stderr || jqVersion.error || "jq unavailable", "Install jq, then restart Copilot CLI."),
     check("CLI settings JSON", settings.exists && !settings.error, settings.error || settingsPath, "Fix malformed settings.json before reinstalling."),
     check("CLI hooks enabled", settings.value && settings.value.disableAllHooks !== true, settings.value?.disableAllHooks === true ? "disableAllHooks=true" : "disableAllHooks=false", "Set disableAllHooks to false or remove it, then restart Copilot CLI."),
     check("All CLI lifecycle hooks", cliHookEventsPresent.length === CLI_HOOK_EVENTS.length, `${cliHookEventsPresent.length}/${CLI_HOOK_EVENTS.length}`, "Run ./install.sh --target cli, then restart Copilot CLI."),
