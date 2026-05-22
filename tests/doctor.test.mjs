@@ -11,6 +11,7 @@ const root = path.resolve(".");
 const installer = path.join(root, "scripts", "install.mjs");
 const doctor = path.join(root, "scripts", "doctor.mjs");
 const rootPackage = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
+process.env.GOAL_SYSTEM_TEST_LINK_NODE_MODULES = path.join(root, "node_modules");
 
 function withTopLevelJsoncComment(raw, comment) {
   return raw.replace("{", `{\n  // ${comment}`).replace(/\n}\s*$/, ",\n}\n");
@@ -102,6 +103,36 @@ test("doctor accepts JSONC Copilot and VS Code config files", async () => {
   assert.equal(report.ok, true);
   assert.equal(report.checks.find((item) => item.label === "CLI settings JSON").ok, true);
   assert.equal(report.checks.find((item) => item.label === "Copilot CLI MCP goal server").ok, true);
+  assert.equal(report.checks.find((item) => item.label === "VS Code MCP goal server").ok, true);
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("doctor honors explicit VS Code MCP config paths", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "goal-doctor-vscode-path-"));
+  const fakeBin = path.join(home, "bin");
+  const vscodeMcpConfigPath = path.join(home, "custom-vscode", "mcp.json");
+  await mkdir(fakeBin, { recursive: true });
+  const fakeCopilot = path.join(fakeBin, "copilot");
+  await writeFile(fakeCopilot, "#!/usr/bin/env bash\nprintf 'GitHub Copilot CLI 1.0.45.\\n'\n");
+  await chmod(fakeCopilot, 0o755);
+
+  const env = { ...process.env, HOME: home, PATH: `${fakeBin}:${process.env.PATH || ""}` };
+  await execFileAsync(process.execPath, [installer, "--target", "all", "--vscode-mcp-config", vscodeMcpConfigPath], {
+    cwd: root,
+    env,
+    maxBuffer: 1024 * 1024 * 12,
+  });
+
+  const { stdout } = await execFileAsync(process.execPath, [doctor, "--home", home, "--target", "all", "--vscode-mcp-config", vscodeMcpConfigPath, "--json"], {
+    cwd: root,
+    env,
+    maxBuffer: 1024 * 1024 * 4,
+  });
+
+  const report = JSON.parse(stdout);
+  assert.equal(report.ok, true);
+  assert.equal(report.paths.vscodeMcpConfigPath, vscodeMcpConfigPath);
   assert.equal(report.checks.find((item) => item.label === "VS Code MCP goal server").ok, true);
 
   await rm(home, { recursive: true, force: true });

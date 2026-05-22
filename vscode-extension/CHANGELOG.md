@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.12
+
+- Makes installer/update release checks less dependent on host package-manager/network behavior.
+- Removes the `jq` requirement from the shared project check path.
+- Uses quieter, cache-friendly dependency installation flags when the bundled installer prepares the local runtime.
+- Aligns doctor checks with installer overrides for custom VS Code MCP config paths.
+
 ## 1.1.11
 
 - Fixes platform-specific doctor regression coverage for VS Code MCP config paths.

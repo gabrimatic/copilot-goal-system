@@ -10,6 +10,7 @@ import { parse as parseJsonc } from "jsonc-parser";
 const execFileAsync = promisify(execFile);
 const root = path.resolve(".");
 const installer = path.join(root, "scripts", "install.mjs");
+process.env.GOAL_SYSTEM_TEST_LINK_NODE_MODULES = path.join(root, "node_modules");
 
 test("installer can add VS Code Chat adapter without overwriting existing MCP servers", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "goal-vscode-install-"));

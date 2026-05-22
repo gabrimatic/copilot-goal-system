@@ -144,7 +144,7 @@ Run a local host health check any time the system feels off:
 npm run doctor
 ```
 
-Use `npm run doctor -- --target all` after installing both adapters.
+Use `npm run doctor -- --target all` after installing both adapters. If you installed VS Code Chat with a custom MCP config path, pass the same path to doctor with `--vscode-mcp-config`.
 
 Repository-level hook config is optional. Copy `.github/hooks/goal-system.json` into a repository if you want the same lifecycle hooks committed with a project.
 

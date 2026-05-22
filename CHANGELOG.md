@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.12
+
+- Makes release verification deterministic by avoiding repeated live `npm ci` calls inside installer and doctor regression tests while keeping explicit failed-update rollback coverage.
+- Removes the `jq` requirement from `npm run check` so JSON validation runs through Node on every supported development host.
+- Adds quieter, more cache-friendly production dependency installation flags for local runtime updates.
+- Teaches `npm run doctor` the same `--vscode-mcp-config` override as the installer so custom VS Code profiles verify the path that was actually updated.
+
 ## 1.1.11
 
 - Fixes the doctor JSONC regression test to use the platform-specific VS Code MCP config path, matching Linux CI and macOS local installs.

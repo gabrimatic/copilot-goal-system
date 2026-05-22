@@ -11,6 +11,7 @@ const execFileAsync = promisify(execFile);
 const root = path.resolve(".");
 const installer = path.join(root, "scripts", "install.mjs");
 const rootPackage = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
+process.env.GOAL_SYSTEM_TEST_LINK_NODE_MODULES = path.join(root, "node_modules");
 
 async function readJsonc(filePath) {
   return parseJsonc(await readFile(filePath, "utf8"));
@@ -402,7 +403,7 @@ test("installer keeps existing runtime when dependency install fails during upda
   await assert.rejects(
     execFileAsync(process.execPath, [installer], {
       cwd: root,
-      env: { ...process.env, HOME: home, PATH: `${fakeBin}:${process.env.PATH || ""}` },
+      env: { ...process.env, GOAL_SYSTEM_TEST_LINK_NODE_MODULES: "", HOME: home, PATH: `${fakeBin}:${process.env.PATH || ""}` },
       maxBuffer: 1024 * 1024 * 8,
     }),
     /npm ci failed/

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { access, chmod, copyFile, cp, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { access, chmod, copyFile, cp, mkdir, readFile, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
@@ -301,7 +301,7 @@ async function installFiles() {
           return isBundledRuntimePath(source, root);
         },
       });
-      installDependencies(tempExtensionDir);
+      await installDependencies(tempExtensionDir);
       await chmodRuntimeExecutables(tempExtensionDir);
       if (await exists(extensionDir)) {
         await rename(extensionDir, previousExtensionDir);
@@ -322,7 +322,7 @@ async function installFiles() {
       throw error;
     }
   } else {
-    installDependencies(extensionDir);
+    await installDependencies(extensionDir);
     await chmodRuntimeExecutables(extensionDir);
   }
 
@@ -345,8 +345,15 @@ async function chmodRuntimeExecutables(runtimeDir) {
   }
 }
 
-function installDependencies(runtimeDir) {
-  const result = spawnSync("npm", ["ci", "--omit=dev", "--ignore-scripts"], {
+async function installDependencies(runtimeDir) {
+  if (process.env.GOAL_SYSTEM_TEST_LINK_NODE_MODULES) {
+    const nodeModulesPath = path.join(runtimeDir, "node_modules");
+    await rm(nodeModulesPath, { recursive: true, force: true });
+    await symlink(process.env.GOAL_SYSTEM_TEST_LINK_NODE_MODULES, nodeModulesPath, process.platform === "win32" ? "junction" : "dir");
+    return;
+  }
+
+  const result = spawnSync("npm", ["ci", "--omit=dev", "--ignore-scripts", "--no-audit", "--fund=false", "--prefer-offline"], {
     cwd: runtimeDir,
     stdio: "inherit",
   });

@@ -36,6 +36,7 @@ function parseArgs(argv) {
     cwd: process.cwd(),
     target: "cli",
     json: false,
+    vscodeMcpConfigPath: process.env.GOAL_SYSTEM_VSCODE_MCP_CONFIG_PATH || "",
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -56,6 +57,11 @@ function parseArgs(argv) {
       index += 1;
     } else if (arg.startsWith("--target=")) {
       options.target = arg.slice("--target=".length);
+    } else if (arg === "--vscode-mcp-config") {
+      options.vscodeMcpConfigPath = argv[index + 1] || options.vscodeMcpConfigPath;
+      index += 1;
+    } else if (arg.startsWith("--vscode-mcp-config=")) {
+      options.vscodeMcpConfigPath = arg.slice("--vscode-mcp-config=".length);
     }
   }
   if (!["cli", "vscode-chat", "all"].includes(options.target)) {
@@ -85,7 +91,8 @@ async function readJsonIfExists(filePath) {
   }
 }
 
-function defaultVscodeMcpConfigPath(home) {
+function defaultVscodeMcpConfigPath(home, override = "") {
+  if (override) return path.resolve(override);
   if (process.platform === "win32") {
     return path.join(process.env.APPDATA || path.join(home, "AppData", "Roaming"), "Code", "User", "mcp.json");
   }
@@ -154,7 +161,7 @@ async function main() {
   const extensionDir = path.join(copilotRoot, "extensions", "goal-system");
   const settingsPath = path.join(copilotRoot, "settings.json");
   const cliMcpConfigPath = path.join(copilotRoot, "mcp-config.json");
-  const vscodeMcpConfigPath = defaultVscodeMcpConfigPath(options.home);
+  const vscodeMcpConfigPath = defaultVscodeMcpConfigPath(options.home, options.vscodeMcpConfigPath);
   const mcpServerPath = path.join(extensionDir, "adapters", "vscode-chat", "mcp-server.mjs");
 
   const settings = await readJsonIfExists(settingsPath);
