@@ -75,8 +75,9 @@ test("installer merges hooks, writes backups, and preserves existing settings", 
   assert.equal(settings.hooks.sessionStart.some((hook) => hook.bash === "$HOME/.copilot/hooks/existing.sh"), true);
   assert.equal(settings.hooks.sessionStart.some((hook) => hook.bash === "$HOME/.copilot/hooks/goal-context.sh"), true);
   assert.equal(settings.hooks.agentStop.some((hook) => hook.bash === "$HOME/.copilot/hooks/goal-context.sh"), true);
+  assert.equal(settings.hooks.preToolUse.some((hook) => hook.bash === "$HOME/.copilot/hooks/goal-context.sh"), true);
+  assert.equal(settings.hooks.postToolUse.some((hook) => hook.bash === "$HOME/.copilot/hooks/goal-context.sh"), true);
 
-  await assert.rejects(readFile(path.join(copilotDir, "mcp-config.json"), "utf8"), /ENOENT/);
   assert.equal(await readFile(path.join(copilotDir, "extensions", "goal-system", "bin", "goalctl.mjs"), "utf8").then((text) => text.startsWith("#!/usr/bin/env node")), true);
 
   const snippet = await readFile(path.join(copilotDir, "copilot-instructions.md"), "utf8");
@@ -101,54 +102,10 @@ test("installer merges hooks, writes backups, and preserves existing settings", 
   await rm(home, { recursive: true, force: true });
 });
 
-test("installer removes legacy CLI goalSystem server without overwriting existing servers", async () => {
-  const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-cli-legacy-server-"));
-  const copilotDir = path.join(home, ".copilot");
-  await execFileAsync("mkdir", ["-p", copilotDir]);
-  await writeFile(
-    path.join(copilotDir, "mcp-config.json"),
-    JSON.stringify(
-      {
-        mcpServers: {
-          playwright: {
-            type: "stdio",
-            command: "npx",
-            args: ["-y", "@playwright/mcp@latest"],
-            tools: ["*"],
-          },
-          goalSystem: {
-            type: "stdio",
-            command: "node",
-            args: ["/tmp/old/mcp-server.mjs"],
-          },
-        },
-      },
-      null,
-      2
-    )
-  );
-
-  await execFileAsync(process.execPath, [installer], {
-    cwd: root,
-    env: { ...process.env, HOME: home },
-    maxBuffer: 1024 * 1024 * 8,
-  });
-
-  const cliMcpConfig = JSON.parse(await readFile(path.join(copilotDir, "mcp-config.json"), "utf8"));
-  assert.equal(cliMcpConfig.mcpServers.playwright.command, "npx");
-  assert.equal(cliMcpConfig.mcpServers.goalSystem, undefined);
-
-  const findResult = await execFileAsync("find", [copilotDir, "-name", "mcp-config.json.backup-*"], { encoding: "utf8" });
-  assert.match(findResult.stdout, /mcp-config\.json\.backup-/);
-
-  await rm(home, { recursive: true, force: true });
-});
-
-test("installer accepts JSONC settings and removes only legacy goalSystem server entries", async () => {
+test("installer accepts JSONC settings without stripping comments", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-jsonc-"));
   const copilotDir = path.join(home, ".copilot");
-  const vscodeMcpConfigPath = path.join(home, "Code", "User", "mcp.json");
-  await execFileAsync("mkdir", ["-p", copilotDir, path.dirname(vscodeMcpConfigPath)]);
+  await execFileAsync("mkdir", ["-p", copilotDir]);
   await writeFile(
     path.join(copilotDir, "settings.json"),
     `{
@@ -162,30 +119,8 @@ test("installer accepts JSONC settings and removes only legacy goalSystem server
 }
 `
   );
-  await writeFile(
-    path.join(copilotDir, "mcp-config.json"),
-    `{
-  // Existing CLI server should survive.
-  "mcpServers": {
-    "playwright": { "type": "stdio", "command": "npx", "args": ["-y", "@playwright/mcp@latest"] },
-    "goalSystem": { "type": "stdio", "command": "node", "args": ["/tmp/old/mcp-server.mjs"] },
-  },
-}
-`
-  );
-  await writeFile(
-    vscodeMcpConfigPath,
-    `{
-  // Existing VS Code server should survive.
-  "servers": {
-    "existingServer": { "type": "stdio", "command": "node", "args": ["existing.mjs"] },
-    "goalSystem": { "type": "stdio", "command": "node", "args": ["/tmp/old/mcp-server.mjs"] },
-  },
-}
-`
-  );
 
-  await execFileAsync(process.execPath, [installer, "--target", "all", "--vscode-mcp-config", vscodeMcpConfigPath], {
+  await execFileAsync(process.execPath, [installer, "--target", "all"], {
     cwd: root,
     env: { ...process.env, HOME: home },
     maxBuffer: 1024 * 1024 * 12,
@@ -198,50 +133,13 @@ test("installer accepts JSONC settings and removes only legacy goalSystem server
   assert.equal(settings.hooks.sessionStart.some((hook) => hook.bash === "$HOME/.copilot/hooks/existing.sh"), true);
   assert.equal(settings.hooks.agentStop.some((hook) => hook.bash === "$HOME/.copilot/hooks/goal-context.sh"), true);
 
-  const cliMcpRaw = await readFile(path.join(copilotDir, "mcp-config.json"), "utf8");
-  assert.match(cliMcpRaw, /Existing CLI server should survive/);
-  const cliMcpConfig = parseJsonc(cliMcpRaw);
-  assert.equal(cliMcpConfig.mcpServers.playwright.command, "npx");
-  assert.equal(cliMcpConfig.mcpServers.goalSystem, undefined);
-
-  const vscodeMcpRaw = await readFile(vscodeMcpConfigPath, "utf8");
-  assert.match(vscodeMcpRaw, /Existing VS Code server should survive/);
-  const vscodeMcpConfig = parseJsonc(vscodeMcpRaw);
-  assert.equal(vscodeMcpConfig.servers.existingServer.command, "node");
-  assert.equal(vscodeMcpConfig.servers.goalSystem, undefined);
-
   const findResult = await execFileAsync("find", [home, "-name", "*.backup-*"], { encoding: "utf8" });
   assert.match(findResult.stdout, /settings\.json\.backup-/);
-  assert.match(findResult.stdout, /mcp-config\.json\.backup-/);
-  assert.match(findResult.stdout, /mcp\.json\.backup-/);
 
   await rm(home, { recursive: true, force: true });
 });
 
-test("installer ignores corrupt legacy CLI server config while installing no-MCP runtime", async () => {
-  const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-cli-legacy-bad-json-"));
-  const copilotDir = path.join(home, ".copilot");
-  await execFileAsync("mkdir", ["-p", copilotDir]);
-  await writeFile(path.join(copilotDir, "mcp-config.json"), "{bad json");
-
-  const { stderr } = await execFileAsync(process.execPath, [installer], {
-    cwd: root,
-    env: { ...process.env, HOME: home },
-    maxBuffer: 1024 * 1024 * 8,
-  });
-
-  assert.match(stderr, /could not be inspected for legacy Copilot CLI MCP server/);
-  const backups = await execFileAsync("find", [copilotDir, "-name", "mcp-config.json.invalid-backup-*"], { encoding: "utf8" });
-  assert.equal(backups.stdout.trim(), "");
-  assert.equal(await readFile(path.join(copilotDir, "mcp-config.json"), "utf8"), "{bad json");
-
-  const installedPackage = JSON.parse(await readFile(path.join(copilotDir, "extensions", "goal-system", "package.json"), "utf8"));
-  assert.equal(installedPackage.version, rootPackage.version);
-
-  await rm(home, { recursive: true, force: true });
-});
-
-test("installer removes stale CLI preToolUse goal-system drift hooks", async () => {
+test("installer normalizes CLI tool-use hooks while preserving user hooks", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-stale-drift-hook-"));
   const copilotDir = path.join(home, ".copilot");
   await execFileAsync("mkdir", ["-p", copilotDir]);
@@ -289,8 +187,19 @@ test("installer removes stale CLI preToolUse goal-system drift hooks", async () 
       bash: "$HOME/.copilot/hooks/keep-this-user-hook.sh",
       timeoutSec: 5,
     },
+    {
+      type: "command",
+      bash: "$HOME/.copilot/hooks/goal-context.sh",
+      timeoutSec: 5,
+    },
   ]);
-  assert.deepEqual(settings.hooks.postToolUse, []);
+  assert.deepEqual(settings.hooks.postToolUse, [
+    {
+      type: "command",
+      bash: "$HOME/.copilot/hooks/goal-context.sh",
+      timeoutSec: 5,
+    },
+  ]);
   assert.equal(settings.hooks.agentStop.some((hook) => hook.bash === "$HOME/.copilot/hooks/goal-context.sh"), true);
 
   await rm(home, { recursive: true, force: true });
@@ -368,6 +277,11 @@ test("installer normalizes duplicate direct goal hooks without removing composit
     {
       type: "command",
       bash: "~/.copilot/hooks/safety-guard.sh",
+      timeoutSec: 5,
+    },
+    {
+      type: "command",
+      bash: "$HOME/.copilot/hooks/goal-context.sh",
       timeoutSec: 5,
     },
   ]);
@@ -517,7 +431,6 @@ test("installer copies only the runtime bundle allowlist into the installed runt
   await assert.rejects(readFile(path.join(home, ".copilot", "extensions", "goal-system", "dist", `copilot-goal-system-${rootPackage.version}.vsix`), "utf8"), /ENOENT/);
   assert.equal((await stat(path.join(home, ".copilot", "settings.json"))).mode & 0o777, 0o600);
   assert.equal((await stat(path.join(home, ".copilot", "extensions", "goal-system", "bin", "goalctl.mjs"))).mode & 0o777, 0o755);
-  await assert.rejects(readFile(path.join(home, ".copilot", "mcp-config.json"), "utf8"), /ENOENT/);
 
   await rm(home, { recursive: true, force: true });
 });
@@ -537,7 +450,6 @@ test("installer honors COPILOT_HOME for non-default Copilot profiles", async () 
   const settings = await readJsonc(path.join(copilotHome, "settings.json"));
   assert.equal(settings.hooks.agentStop.some((hook) => hook.bash === "$COPILOT_HOME/hooks/goal-context.sh"), true);
   assert.equal((await stat(path.join(copilotHome, "extensions", "goal-system", "bin", "goalctl.mjs"))).mode & 0o777, 0o755);
-  await assert.rejects(readFile(path.join(copilotHome, "mcp-config.json"), "utf8"), /ENOENT/);
   await assert.rejects(readFile(path.join(home, ".copilot", "settings.json"), "utf8"), /ENOENT/);
 
   await rm(home, { recursive: true, force: true });
@@ -565,29 +477,6 @@ test("installer recovers corrupt settings by preserving an invalid backup", asyn
   assert.equal((await stat(path.join(copilotDir, "settings.json"))).mode & 0o777, 0o600);
   const settings = JSON.parse(await readFile(path.join(copilotDir, "settings.json"), "utf8"));
   assert.equal(settings.hooks.agentStop.some((hook) => hook.bash === "$HOME/.copilot/hooks/goal-context.sh"), true);
-  const installedPackage = JSON.parse(await readFile(path.join(copilotDir, "extensions", "goal-system", "package.json"), "utf8"));
-  assert.equal(installedPackage.version, rootPackage.version);
-
-  await rm(home, { recursive: true, force: true });
-});
-
-test("installer ignores corrupt legacy VS Code server config before installing all targets", async () => {
-  const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-vscode-legacy-bad-json-"));
-  const copilotDir = path.join(home, ".copilot");
-  const vscodeMcpConfigPath = path.join(home, "Code", "User", "mcp.json");
-  await execFileAsync("mkdir", ["-p", path.dirname(vscodeMcpConfigPath), copilotDir]);
-  await writeFile(vscodeMcpConfigPath, "{bad json");
-
-  const { stderr } = await execFileAsync(process.execPath, [installer, "--target", "all", "--vscode-mcp-config", vscodeMcpConfigPath], {
-    cwd: root,
-    env: { ...process.env, HOME: home },
-    maxBuffer: 1024 * 1024 * 8,
-  });
-
-  assert.match(stderr, /could not be inspected for legacy VS Code MCP server/);
-  const backups = await execFileAsync("find", [home, "-name", "mcp.json.invalid-backup-*"], { encoding: "utf8" });
-  assert.equal(backups.stdout.trim(), "");
-  assert.equal(await readFile(vscodeMcpConfigPath, "utf8"), "{bad json");
   const installedPackage = JSON.parse(await readFile(path.join(copilotDir, "extensions", "goal-system", "package.json"), "utf8"));
   assert.equal(installedPackage.version, rootPackage.version);
 

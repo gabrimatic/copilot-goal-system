@@ -86,7 +86,7 @@ Confirm the `goal` skill appears and the extension tools are visible. After inst
 | Path | Purpose |
 |------|---------|
 | `~/.copilot/extensions/goal-system/` | Extension package, tests, docs, hook config, and dependencies. |
-| `~/.copilot/extensions/goal-system/bin/goalctl.mjs` | Local no-MCP command fallback for goal status, open, update, and close. |
+| `~/.copilot/extensions/goal-system/bin/goalctl.mjs` | Local command fallback for goal status, open, update, and close. |
 | `~/.copilot/skills/goal/SKILL.md` | Goal-mode skill used by Copilot. |
 | `~/.copilot/hooks/goal-context.sh` | CLI lifecycle hook helper. |
 | `~/.copilot/hooks/goal-system-vscode.json` | VS Code Chat lifecycle hook config. |
@@ -97,7 +97,7 @@ Confirm the `goal` skill appears and the extension tools are visible. After inst
 The installer preserves existing settings. It appends missing goal hooks, leaves unrelated hooks alone, and recognizes existing goal hooks written with `~`, `$HOME`, `$COPILOT_HOME`, absolute paths, or wrapper commands. If a composite user hook already runs `goal-context.sh`, the installer keeps that hook and does not add a duplicate direct goal hook. Empty JSON or JSONC config files are initialized as empty objects. Malformed JSON/JSONC or parseable non-object target config files are preserved as `*.invalid-backup-*`, replaced with a clean JSON object, and then updated so reinstall and update flows can recover from broken local config.
 
 Copilot CLI `settings.json` is handled as a JSONC-compatible config file. Comments and trailing commas are accepted, and comments outside the exact updated subtree are preserved while the installer updates `hooks`.
-Older releases created `goalSystem` server entries in local config. Current installs remove those legacy entries when the config file is parseable, but do not create or rely on any MCP server.
+Current installs use local hooks, direct tools, and `goalctl`; they do not create server config.
 Config backups keep the original file permissions, and newly created config files default to owner-only permissions.
 
 Runtime updates are prepared in a temporary directory first. The installer copies the new package, runs `npm ci --omit=dev --ignore-scripts`, and marks runtime entrypoints executable before replacing `~/.copilot/extensions/goal-system/`. If dependency installation fails, the previous runtime remains in place and config files are not changed.
@@ -231,7 +231,7 @@ Also remove the marked snippet in `~/.copilot/copilot-instructions.md`:
 <!-- copilot-goal-system snippet end -->
 ```
 
-Current installers remove legacy `goalSystem` server entries when those old config files are parseable. If you are uninstalling by hand, remove any remaining `goalSystem` entries from old local server config files as cleanup only.
+Current installers do not write any server config. Uninstalling only needs to remove the installed goal files, hook entries, and instruction snippet above.
 
 ## Troubleshooting
 

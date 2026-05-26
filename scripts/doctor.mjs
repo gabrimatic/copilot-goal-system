@@ -10,8 +10,6 @@ const require = createRequire(import.meta.url);
 const {
   countDuplicateGoalHooks,
   findStaleDriftHookEvents,
-  hasLegacyCliGoalServer,
-  hasLegacyVscodeGoalServer,
   hookInstalled,
 } = require("../lib/install-status.cjs");
 const { parseJsoncText } = require("../lib/jsonc-file.cjs");
@@ -26,6 +24,8 @@ const CLI_HOOK_EVENTS = [
   "agentStop",
   "subagentStart",
   "subagentStop",
+  "preToolUse",
+  "postToolUse",
   "postToolUseFailure",
   "notification",
 ];
@@ -36,7 +36,6 @@ function parseArgs(argv) {
     cwd: process.cwd(),
     target: "cli",
     json: false,
-    legacyVscodeMcpConfigPath: process.env.GOAL_SYSTEM_VSCODE_MCP_CONFIG_PATH || "",
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -57,11 +56,6 @@ function parseArgs(argv) {
       index += 1;
     } else if (arg.startsWith("--target=")) {
       options.target = arg.slice("--target=".length);
-    } else if (arg === "--vscode-mcp-config") {
-      options.legacyVscodeMcpConfigPath = argv[index + 1] || options.legacyVscodeMcpConfigPath;
-      index += 1;
-    } else if (arg.startsWith("--vscode-mcp-config=")) {
-      options.legacyVscodeMcpConfigPath = arg.slice("--vscode-mcp-config=".length);
     }
   }
   if (!["cli", "vscode-chat", "all"].includes(options.target)) {
@@ -89,17 +83,6 @@ async function readJsonIfExists(filePath) {
     if (error.code === "ENOENT") return { value: null, exists: false };
     return { value: null, exists: true, error: error.message || String(error) };
   }
-}
-
-function legacyVscodeMcpConfigPath(home, override = "") {
-  if (override) return path.resolve(override);
-  if (process.platform === "win32") {
-    return path.join(process.env.APPDATA || path.join(home, "AppData", "Roaming"), "Code", "User", "mcp.json");
-  }
-  if (process.platform === "darwin") {
-    return path.join(home, "Library", "Application Support", "Code", "User", "mcp.json");
-  }
-  return path.join(process.env.XDG_CONFIG_HOME || path.join(home, ".config"), "Code", "User", "mcp.json");
 }
 
 function run(command, args, options = {}) {
@@ -131,13 +114,9 @@ async function main() {
   const copilotRoot = copilotRootForHome(options.home);
   const extensionDir = path.join(copilotRoot, "extensions", "goal-system");
   const settingsPath = path.join(copilotRoot, "settings.json");
-  const legacyCliMcpConfigPath = path.join(copilotRoot, "mcp-config.json");
-  const legacyVscodeConfigPath = legacyVscodeMcpConfigPath(options.home, options.legacyVscodeMcpConfigPath);
   const goalctlPath = path.join(extensionDir, "bin", "goalctl.mjs");
 
   const settings = await readJsonIfExists(settingsPath);
-  const cliMcpConfig = await readJsonIfExists(legacyCliMcpConfigPath);
-  const vscodeMcpConfig = await readJsonIfExists(legacyVscodeConfigPath);
   const installedPackage = await readJsonIfExists(path.join(extensionDir, "package.json"));
   const copilotVersion = run("copilot", ["--version"], { env: profileEnv(options.home) });
   const jqVersion = run("jq", ["--version"], { env: profileEnv(options.home) });
@@ -146,8 +125,6 @@ async function main() {
   const cliHookEventsPresent = settings.value ? CLI_HOOK_EVENTS.filter((eventName) => hookInstalled(settings.value, eventName)) : [];
   const duplicateCliGoalHooks = settings.value ? countDuplicateGoalHooks(settings.value, CLI_HOOK_EVENTS) : {};
   const staleCliDriftHookEvents = settings.value ? findStaleDriftHookEvents(settings.value) : [];
-  const legacyCliGoalServerPresent = cliMcpConfig.value ? hasLegacyCliGoalServer(cliMcpConfig.value) : false;
-  const legacyVscodeGoalServerPresent = vscodeMcpConfig.value ? hasLegacyVscodeGoalServer(vscodeMcpConfig.value) : false;
   const cliChecks = [
     check("Copilot CLI command", copilotVersion.ok, copilotVersion.stdout || copilotVersion.stderr || copilotVersion.error, "Install or repair GitHub Copilot CLI."),
     check("Installed runtime package", installedPackage.value?.version === packageJson.version, installedPackage.value?.version || "missing", "Run ./install.sh --target cli."),
@@ -160,8 +137,7 @@ async function main() {
     check("CLI hooks enabled", settings.value && settings.value.disableAllHooks !== true, settings.value?.disableAllHooks === true ? "disableAllHooks=true" : "disableAllHooks=false", "Set disableAllHooks to false or remove it, then restart Copilot CLI."),
     check("All CLI lifecycle hooks", cliHookEventsPresent.length === CLI_HOOK_EVENTS.length, `${cliHookEventsPresent.length}/${CLI_HOOK_EVENTS.length}`, "Run ./install.sh --target cli, then restart Copilot CLI."),
     check("No duplicate CLI goal hooks", Object.keys(duplicateCliGoalHooks).length === 0, JSON.stringify(duplicateCliGoalHooks), "Run ./install.sh --target cli to normalize direct duplicates."),
-    check("No stale hard drift hooks", staleCliDriftHookEvents.length === 0, staleCliDriftHookEvents.join(", ") || "none", "Run ./install.sh --target cli to remove stale preToolUse/postToolUse goal hooks."),
-    check("No legacy CLI goalSystem server", !legacyCliGoalServerPresent, cliMcpConfig.error || (legacyCliGoalServerPresent ? legacyCliMcpConfigPath : "none"), "Run ./install.sh --target cli to remove the old goalSystem server entry."),
+    check("No stale wrapped drift hooks", staleCliDriftHookEvents.length === 0, staleCliDriftHookEvents.join(", ") || "none", "Run ./install.sh --target cli to normalize goal hook entries."),
   ];
   const vscodeChecks = [
     check("Installed runtime package", installedPackage.value?.version === packageJson.version, installedPackage.value?.version || "missing", "Run ./install.sh --target all."),
@@ -169,7 +145,6 @@ async function main() {
     check("goalctl self-test", goalctlSelfTest.ok, goalctlSelfTest.stdout || goalctlSelfTest.stderr || goalctlSelfTest.error, "Run ./install.sh --target vscode-chat."),
     check("VS Code Chat custom agent", await exists(path.join(copilotRoot, "agents", "goal-system.agent.md")), path.join(copilotRoot, "agents", "goal-system.agent.md"), "Run ./install.sh --target vscode-chat."),
     check("VS Code Chat hook config", await exists(path.join(copilotRoot, "hooks", "goal-system-vscode.json")), path.join(copilotRoot, "hooks", "goal-system-vscode.json"), "Run ./install.sh --target vscode-chat."),
-    check("No legacy VS Code goalSystem server", !legacyVscodeGoalServerPresent, vscodeMcpConfig.error || (legacyVscodeGoalServerPresent ? legacyVscodeConfigPath : "none"), "Run ./install.sh --target vscode-chat to remove the old goalSystem server entry."),
   ];
   const checks =
     options.target === "cli"
@@ -186,8 +161,6 @@ async function main() {
     paths: {
       copilotRoot,
       settingsPath,
-      legacyCliMcpConfigPath,
-      legacyVscodeConfigPath,
       extensionDir,
       goalctlPath,
     },

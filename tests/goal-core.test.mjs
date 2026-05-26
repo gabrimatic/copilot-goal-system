@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -18,6 +18,7 @@ import {
   isLikelySubagentInvocation,
   isOpenGoal,
   mergeGoal,
+  normalizeCwd,
   redactSensitiveText,
   safeSessionId,
   shouldEnforceDrift,
@@ -41,6 +42,17 @@ test("activation regex recognizes slash-command and natural-language goal prompt
   assert.equal(ACTIVATION_REGEX.test("please use /goal and fix the repo"), true);
   assert.equal(ACTIVATION_REGEX.test("keep working until this is done"), true);
   assert.equal(ACTIVATION_REGEX.test("ordinary one-off question"), false);
+});
+
+test("normalizeCwd canonicalizes existing symlinked directories", async () => {
+  const home = await mkdtemp(path.join(tmpdir(), "goal-normalize-cwd-"));
+  const realDir = await mkdtemp(path.join(home, "real-"));
+  const linkDir = path.join(home, "link");
+  await symlink(realDir, linkDir, process.platform === "win32" ? "junction" : "dir");
+
+  assert.equal(normalizeCwd(linkDir), normalizeCwd(await realpath(realDir)));
+
+  await rm(home, { recursive: true, force: true });
 });
 
 test("redaction removes sensitive values from persisted previews and history", () => {

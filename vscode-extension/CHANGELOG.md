@@ -1,22 +1,28 @@
 # Changelog
 
+## 1.1.18
+
+- Removes the remaining legacy server cleanup/status surface from the Marketplace bundle.
+- Adds CLI tool-use lifecycle hook coverage so local installs can warn on stale goal state while keeping useful investigation recoverable.
+- Keeps completion and stop-time enforcement strict: open goals block premature final stop, and close refuses missing proof or unresolved work.
+
 ## 1.1.17
 
-- Removes the goal-system MCP server and MCP SDK dependency from the bundled runtime.
+- Removes the goal-system legacy server process and external server SDK dependency from the bundled runtime.
 - Adds direct VS Code language model tools for goal status, open, update, and close.
-- Adds the local `goalctl` command fallback and updates setup/status checks for no-MCP installs.
-- Cleans up legacy `goalSystem` server entries from older local profiles instead of creating new MCP config.
+- Adds the local `goalctl` command fallback and updates setup/status checks for local installs.
+- Stops creating legacy server config for older local profiles.
 
 ## 1.1.16
 
-- Recovers malformed or non-object Copilot and VS Code MCP target config files during install/update by preserving the original as an `*.invalid-backup-*` file, recreating a clean JSON object, and continuing setup.
+- Recovers malformed or non-object Copilot and VS Code target config files during install/update by preserving the original as an `*.invalid-backup-*` file, recreating a clean JSON object, and continuing setup.
 - Preserves existing config file permissions when writing backups or replacing target JSON/JSONC files.
-- Adds Marketplace-bundled installer regression coverage for corrupt VS Code MCP config recovery.
+- Adds Marketplace-bundled installer regression coverage for corrupt VS Code config recovery.
 - Documents the recovery behavior for repeated extension reinstall/update flows.
 
 ## 1.1.15
 
-- Fixes Linux CI doctor test isolation for fake VS Code MCP config paths.
+- Fixes Linux CI doctor test isolation for fake VS Code config paths.
 
 ## 1.1.14
 
@@ -34,11 +40,11 @@
 - Makes installer/update release checks less dependent on host package-manager/network behavior.
 - Removes the `jq` requirement from the shared project check path.
 - Uses quieter, cache-friendly dependency installation flags when the bundled installer prepares the local runtime.
-- Aligns doctor checks with installer overrides for custom VS Code MCP config paths.
+- Aligns doctor checks with installer overrides for custom VS Code config paths.
 
 ## 1.1.11
 
-- Fixes platform-specific doctor regression coverage for VS Code MCP config paths.
+- Fixes platform-specific doctor regression coverage for VS Code config paths.
 
 ## 1.1.10
 
@@ -48,18 +54,18 @@
 
 ## 1.1.9
 
-- Accepts JSONC in Copilot CLI and VS Code MCP config files during install and status checks.
-- Preserves comments outside the exact updated config subtrees when merging goal hooks and MCP server entries.
+- Accepts JSONC in Copilot CLI and VS Code config files during install and status checks.
+- Preserves comments outside the exact updated config subtrees when merging goal hooks.
 - Prepares production dependencies before replacing the installed local runtime during updates.
 - Supports non-default `COPILOT_HOME` profile paths in the bundled installer.
 - Adds Marketplace-bundle regression coverage for valid commented config files, failed update rollback, and custom Copilot profiles.
 
 ## 1.1.8
 
-- Installs a Copilot CLI MCP fallback server so goal tools can be discovered through normal MCP configuration.
-- Adds local doctor diagnostics for runtime files, CLI hooks, CLI MCP loading, exact configured MCP self-tests, VS Code MCP, duplicate hooks, and stale drift hooks.
-- Includes `sessionId` and `cwd` in CLI hook context and creates a persisted CLI draft goal from explicit `/goal` prompts so MCP tools have the arguments they need.
-- Recognizes Copilot CLI's MCP-prefixed goal tool names and reports partial CLI-only or VS Code-only installs more clearly.
+- Installs a Copilot CLI local command fallback so goal tools can recover when direct tools are hidden.
+- Adds local doctor diagnostics for runtime files, CLI hooks, local command self-tests, VS Code hooks, duplicate hooks, and stale drift hooks.
+- Includes `sessionId` and `cwd` in CLI hook context and creates a persisted CLI draft goal from explicit `/goal` prompts so fallback tools have the arguments they need.
+- Recognizes prefixed goal tool names and reports partial CLI-only or VS Code-only installs more clearly.
 
 ## 1.1.7
 
@@ -94,7 +100,7 @@
 
 ## 1.1.2
 
-- Treats an empty VS Code `mcp.json` file as an empty MCP config when installing or updating local files.
+- Treats an empty VS Code profile config file as an empty config when installing or updating local files.
 - Preserves the existing refusal behavior for malformed non-empty JSON.
 
 ## 1.1.1
@@ -107,7 +113,7 @@
 
 - Adds `Copilot Goal System: Install Recommended Setup` for CLI plus VS Code Chat setup.
 - Adds separate CLI-only and VS Code Chat-only install commands.
-- Adds status checks for the VS Code Chat custom agent, hook config, MCP server, and MCP config.
+- Adds status checks for the VS Code Chat custom agent, hook config, and local goal tools.
 - Updates walkthrough and Marketplace copy for VS Code Copilot Chat preview support.
 
 ## 1.0.2

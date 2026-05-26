@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -62,7 +62,7 @@ async function writeGoal(home, sessionId, cwd, patch = {}) {
     ...patch,
   };
   await writeFile(path.join(sessionDir, `${sessionId}.json`), JSON.stringify(goal, null, 2));
-  const cwdHash = createHash("sha1").update(path.resolve(cwd)).digest("hex");
+  const cwdHash = createHash("sha1").update(await realpath(path.resolve(cwd))).digest("hex");
   await writeFile(path.join(cwdSessionDir, `${cwdHash}--${sessionId}.json`), JSON.stringify(goal, null, 2));
   await writeFile(path.join(workspaceDir, "goal-state.json"), JSON.stringify(goal, null, 2));
   return { goal, stateRoot };

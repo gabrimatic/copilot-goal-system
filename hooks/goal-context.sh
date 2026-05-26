@@ -200,7 +200,7 @@ Session ID: $safe_sid
 CWD: $normalized_cwd
 Use direct goal_system_* tools when available. If direct tools are unavailable, use:
 node "$copilot_home/extensions/goal-system/bin/goalctl.mjs" status --session-id "$safe_sid" --cwd "$normalized_cwd"
-No MCP server is required or configured by this goal system.
+Goal state is local. Use direct goal tools when available or goalctl when they are not.
 When the prompt explicitly starts goal mode, call goal_system_open with these exact values, or run goalctl open with the same Session ID and CWD. For active goals, use goal_system_status or goalctl status before continuing or closing. Subagents must not use goal tools.
 EOF_EMPTY
 }
@@ -282,6 +282,69 @@ create_cli_draft_goal() {
     }'
 }
 
+tool_name_text() {
+  jq_get '.toolName // .tool_name // .name'
+}
+
+tool_command_text() {
+  jq_get '.toolArgs.command // .tool_input.command // .arguments.command // .command'
+}
+
+is_goal_state_tool() {
+  local name
+  local command_text
+  name="$(tool_name_text)"
+  command_text="$(tool_command_text)"
+  if [[ "$name" =~ (^|[-_/.])goal_system_(status|open|update|close)$ ]]; then
+    return 0
+  fi
+  if [[ "$command_text" =~ (^|[[:space:]\"\'\`/])goalctl(\.mjs)?[[:space:]]+(status|open|update|close)([[:space:]]|$) ]]; then
+    return 0
+  fi
+  return 1
+}
+
+summarize_tool_note() {
+  local name
+  name="$(tool_name_text)"
+  [[ -n "$name" ]] || name="tool"
+  printf '%s' "$name" | sed -E 's/[[:cntrl:]]+/ /g; s/[[:space:]]+/ /g' | cut -c1-160
+}
+
+count_tool_drift() {
+  jq -r '
+    (.history // []) as $history
+    | reduce range(($history | length) - 1; -1; -1) as $index
+        ({count: 0, stopped: false};
+          if .stopped then .
+          else
+            ($history[$index] // {}) as $entry
+            | if ((["open", "update", "close", "turn"] | index($entry.type // "")) != null) then
+                .stopped = true
+              elif (($entry.type // "") == "tool" and (($entry.note // "") | test("(^|[-_/.])goal_system_(status|open|update|close)$") | not)) then
+                .count += 1
+              else
+                .
+              end
+          end)
+    | .count
+  ' "$goal_path" 2>/dev/null || printf '0'
+}
+
+record_tool_history() {
+  local note="$1"
+  local timestamp="$2"
+  local next_goal
+  next_goal=$(jq --arg note "$note" --arg now "$timestamp" '
+    .updatedAt = $now
+    | .history = (((.history // []) + [{ at: $now, type: "tool", note: $note }]) | .[-40:])
+  ' "$goal_path" 2>/dev/null || true)
+  [[ -n "$next_goal" ]] || return 0
+  write_goal_json "$session_goal_path" "$next_goal"
+  write_goal_json "$workspace_goal_path" "$next_goal"
+  write_goal_json "$cwd_goal_path" "$next_goal"
+}
+
 if [[ -z "$goal_path" ]]; then
   case "$hook_event" in
     sessionStart)
@@ -319,6 +382,36 @@ EOF_ACTIVATION
   esac
   exit 0
 fi
+
+case "$hook_event" in
+  preToolUse)
+    if is_goal_state_tool; then
+      exit 0
+    fi
+    drift_count=$(count_tool_drift)
+    if [[ "$drift_count" =~ ^[0-9]+$ && "$drift_count" -ge 5 ]]; then
+      drift_message="Goal-state drift guard: $drift_count tool calls have run since the last goal update. Keep using tools when needed, but checkpoint the persisted goal now: run goalctl update with verified doneSoFar, inspectionEvidence or verificationResults, and the current remaining/blockers."
+      if [[ "${GOAL_SYSTEM_HARD_DRIFT_BLOCK:-0}" == "1" ]]; then
+        jq -n --arg reason "$drift_message" '{decision: "block", reason: $reason}'
+      else
+        jq -n --arg additionalContext "$drift_message" '{additionalContext: $additionalContext}'
+      fi
+      exit 0
+    fi
+    if [[ "$drift_count" =~ ^[0-9]+$ && "$drift_count" -ge 3 ]]; then
+      drift_message="Goal-state drift warning: $drift_count tool calls have run since the last goal update. Keep investigating, but checkpoint the persisted goal at the next useful point with goalctl update."
+      jq -n --arg additionalContext "$drift_message" '{additionalContext: $additionalContext}'
+      exit 0
+    fi
+    exit 0
+    ;;
+  postToolUse)
+    if ! is_goal_state_tool; then
+      record_tool_history "$(summarize_tool_note)" "$(now_iso)" || true
+    fi
+    exit 0
+    ;;
+esac
 
 join_list() {
   local key="$1"

@@ -90,7 +90,7 @@ test("subagentStart injects a main-session-only boundary even when camelCase pay
   await rm(home, { recursive: true, force: true });
 });
 
-test("sessionStart without an active goal injects no-MCP session context", async () => {
+test("sessionStart without an active goal injects local session context", async () => {
   const home = path.join(tmpdir(), `goal-hook-${process.pid}-empty-session`);
   const cwd = path.join(home, "project");
   await mkdir(cwd, { recursive: true });
@@ -109,9 +109,96 @@ test("sessionStart without an active goal injects no-MCP session context", async
   assert.match(parsed.additionalContext, /Goal System for Copilot CLI is available/);
   assert.match(parsed.additionalContext, /Session ID: session-empty/);
   assert.match(parsed.additionalContext, /CWD: /);
-  assert.match(parsed.additionalContext, /No MCP server is required/);
   assert.match(parsed.additionalContext, /goalctl\.mjs/);
   assert.match(parsed.additionalContext, /goal_system_open/);
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("postToolUse records tool history for active CLI goals", async () => {
+  const home = path.join(tmpdir(), `goal-hook-${process.pid}-posttool`);
+  const cwd = path.join(home, "project");
+  await mkdir(cwd, { recursive: true });
+  await writeGoal(home, "session-posttool", cwd);
+
+  const result = await runHook(
+    {
+      hook_event_name: "postToolUse",
+      sessionId: "session-posttool",
+      timestamp: Date.now(),
+      cwd,
+      toolName: "readFile",
+      toolResult: "ok",
+    },
+    { HOME: home }
+  );
+
+  assert.equal(result.stdout, "");
+  const goal = JSON.parse(await readFile(path.join(home, ".copilot", "session-state", "goal-system", "by-session", "session-posttool.json"), "utf8"));
+  assert.equal(goal.history.at(-1).type, "tool");
+  assert.equal(goal.history.at(-1).note, "readFile");
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("preToolUse warns on stale CLI goal state without blocking useful work", async () => {
+  const home = path.join(tmpdir(), `goal-hook-${process.pid}-pretool-warn`);
+  const cwd = path.join(home, "project");
+  await mkdir(cwd, { recursive: true });
+  await writeGoal(home, "session-pretool", cwd, {
+    history: Array.from({ length: 3 }, (_value, index) => ({
+      at: `2026-05-06T07:0${index}:00.000Z`,
+      type: "tool",
+      note: `readFile-${index}`,
+    })),
+  });
+
+  const result = await runHook(
+    {
+      hook_event_name: "preToolUse",
+      sessionId: "session-pretool",
+      timestamp: Date.now(),
+      cwd,
+      toolName: "bash",
+      toolArgs: { command: "npm test" },
+    },
+    { HOME: home }
+  );
+
+  const parsed = JSON.parse(result.stdout);
+  assert.match(parsed.additionalContext, /Goal-state drift warning/);
+  assert.doesNotMatch(result.stdout, /"block"/);
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("preToolUse can hard-block stale CLI drift when explicitly enabled", async () => {
+  const home = path.join(tmpdir(), `goal-hook-${process.pid}-pretool-block`);
+  const cwd = path.join(home, "project");
+  await mkdir(cwd, { recursive: true });
+  await writeGoal(home, "session-pretool-block", cwd, {
+    history: Array.from({ length: 5 }, (_value, index) => ({
+      at: `2026-05-06T07:0${index}:00.000Z`,
+      type: "tool",
+      note: `readFile-${index}`,
+    })),
+  });
+
+  const result = await runHook(
+    {
+      hook_event_name: "preToolUse",
+      sessionId: "session-pretool-block",
+      timestamp: Date.now(),
+      cwd,
+      toolName: "bash",
+      toolArgs: { command: "npm test" },
+    },
+    { HOME: home, GOAL_SYSTEM_HARD_DRIFT_BLOCK: "1" }
+  );
+
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.decision, "block");
+  assert.match(parsed.reason, /Goal-state drift guard/);
 
   await rm(home, { recursive: true, force: true });
 });

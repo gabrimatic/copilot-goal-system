@@ -17,7 +17,7 @@ async function runGoalctl(args, options = {}) {
   });
 }
 
-test("goalctl opens, updates, and reads persisted state without MCP", async () => {
+test("goalctl opens, updates, and reads persisted local state", async () => {
   const home = await mkdtemp(path.join(tmpdir(), "goalctl-open-update-"));
   const cwd = path.join(home, "project");
   await mkdir(cwd, { recursive: true });
@@ -30,11 +30,11 @@ test("goalctl opens, updates, and reads persisted state without MCP", async () =
     "--cwd",
     cwd,
     "--objective",
-    "Remove MCP dependency",
+    "Prove the local goal path",
     "--remaining",
     "Run tests",
   ], { env });
-  assert.match(openResult.stdout, /Objective: Remove MCP dependency/);
+  assert.match(openResult.stdout, /Objective: Prove the local goal path/);
 
   const updateResult = await runGoalctl([
     "update",
@@ -58,7 +58,7 @@ test("goalctl opens, updates, and reads persisted state without MCP", async () =
   assert.match(statusResult.stdout, /Verification results: goalctl smoke passed/);
 
   const goal = JSON.parse(await readFile(path.join(home, ".copilot", "session-state", "goal-system", "by-session", "session-goalctl.json"), "utf8"));
-  assert.equal(goal.objective, "Remove MCP dependency");
+  assert.equal(goal.objective, "Prove the local goal path");
   assert.equal(goal.doneSoFar.includes("Added goalctl fallback"), true);
 
   await rm(home, { recursive: true, force: true });

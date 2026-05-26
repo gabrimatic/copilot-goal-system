@@ -19,7 +19,6 @@ const skillDir = path.join(copilotRoot, "skills", "goal");
 const hookDir = path.join(copilotRoot, "hooks");
 const agentDir = path.join(copilotRoot, "agents");
 const settingsPath = path.join(copilotRoot, "settings.json");
-const legacyCliMcpConfigPath = path.join(copilotRoot, "mcp-config.json");
 const instructionsPath = path.join(copilotRoot, "copilot-instructions.md");
 const vscodeHookConfigPath = path.join(hookDir, "goal-system-vscode.json");
 const vscodeAgentPath = path.join(agentDir, "goal-system.agent.md");
@@ -40,6 +39,8 @@ function hookEvents() {
     agentStop: [{ type: "command", bash, timeoutSec: 5 }],
     subagentStart: [{ type: "command", bash, timeoutSec: 5 }],
     subagentStop: [{ type: "command", bash, timeoutSec: 5 }],
+    preToolUse: [{ type: "command", bash, timeoutSec: 5 }],
+    postToolUse: [{ type: "command", bash, timeoutSec: 5 }],
     postToolUseFailure: [{ type: "command", bash, timeoutSec: 5 }],
     notification: [
       {
@@ -59,7 +60,6 @@ function stamp() {
 function parseArgs(argv) {
   const options = {
     target: "cli",
-    legacyVscodeMcpConfigPath: process.env.GOAL_SYSTEM_VSCODE_MCP_CONFIG_PATH || "",
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -69,11 +69,6 @@ function parseArgs(argv) {
       index += 1;
     } else if (arg.startsWith("--target=")) {
       options.target = arg.slice("--target=".length);
-    } else if (arg === "--vscode-mcp-config") {
-      options.legacyVscodeMcpConfigPath = argv[index + 1] || options.legacyVscodeMcpConfigPath;
-      index += 1;
-    } else if (arg.startsWith("--vscode-mcp-config=")) {
-      options.legacyVscodeMcpConfigPath = arg.slice("--vscode-mcp-config=".length);
     }
   }
 
@@ -191,17 +186,6 @@ async function exists(filePath) {
   }
 }
 
-function legacyVscodeMcpConfigPath() {
-  if (options.legacyVscodeMcpConfigPath) return path.resolve(options.legacyVscodeMcpConfigPath);
-  if (process.platform === "win32") {
-    return path.join(process.env.APPDATA || path.join(home, "AppData", "Roaming"), "Code", "User", "mcp.json");
-  }
-  if (process.platform === "darwin") {
-    return path.join(home, "Library", "Application Support", "Code", "User", "mcp.json");
-  }
-  return path.join(process.env.XDG_CONFIG_HOME || path.join(home, ".config"), "Code", "User", "mcp.json");
-}
-
 function sameHook(left, right) {
   return left?.type === right?.type && left?.bash === right?.bash && (left?.matcher || "") === (right?.matcher || "");
 }
@@ -291,49 +275,6 @@ async function mergeSettingsHooks() {
   }
 
   await writeTextAtomic(settingsPath, updateJsoncPath(settingsDocument.raw, ["hooks"], settings.hooks));
-}
-
-async function removeLegacyGoalServer(filePath, parentKey, description) {
-  let document;
-  try {
-    document = await readJsonDocumentIfExists(filePath);
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      process.stderr.write(
-        `${filePath} could not be inspected for legacy ${description}: ${error.message}. ` +
-          "Goal System no longer uses that config file; leaving it untouched.\n"
-      );
-      return false;
-    }
-    throw error;
-  }
-
-  if (!document.exists) return false;
-  const config = document.value;
-  if (!config || typeof config !== "object" || Array.isArray(config)) {
-    process.stderr.write(
-      `${filePath} is not a JSON object, so legacy ${description} cleanup was skipped. ` +
-        "Goal System no longer uses that config file.\n"
-    );
-    return false;
-  }
-
-  const parent = config[parentKey];
-  if (!parent || typeof parent !== "object" || Array.isArray(parent) || !Object.prototype.hasOwnProperty.call(parent, "goalSystem")) {
-    return false;
-  }
-
-  await writeTextAtomic(filePath, updateJsoncPath(document.raw, [parentKey, "goalSystem"], undefined));
-  process.stderr.write(`Removed legacy goalSystem ${description} from ${filePath}.\n`);
-  return true;
-}
-
-async function removeLegacyCliMcpServer() {
-  return removeLegacyGoalServer(legacyCliMcpConfigPath, "mcpServers", "Copilot CLI MCP server");
-}
-
-async function removeLegacyVscodeMcpServer() {
-  return removeLegacyGoalServer(legacyVscodeMcpConfigPath(), "servers", "VS Code MCP server");
 }
 
 async function appendInstructionsSnippet() {
@@ -441,7 +382,6 @@ async function installVscodeChatAdapter() {
 
   const agent = await readFile(path.join(root, "adapters", "vscode-chat", "agents", "goal-system.agent.md"), "utf8");
   await writeTextAtomic(vscodeAgentPath, agent.endsWith("\n") ? agent : `${agent}\n`);
-  await removeLegacyVscodeMcpServer();
 }
 
 async function preflightTargetConfigFiles(targets) {
@@ -457,7 +397,6 @@ async function main() {
 
   if (targets.has("cli")) {
     await mergeSettingsHooks();
-    await removeLegacyCliMcpServer();
     await appendInstructionsSnippet();
   }
   if (targets.has("vscode-chat")) {

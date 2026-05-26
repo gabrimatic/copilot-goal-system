@@ -32,7 +32,7 @@ The Marketplace **Install** button installs the VS Code wrapper. The command abo
 
 - Copilot CLI stable adapter
 - VS Code Copilot Chat preview adapter
-- local no-MCP goal tools
+- local goal tools
 - lifecycle hooks
 - the Goal System custom agent
 
@@ -119,20 +119,18 @@ For Copilot CLI, the installer:
 2. Installs production dependencies inside that extension directory.
 3. Installs the goal skill at `~/.copilot/skills/goal/SKILL.md`.
 4. Installs the hook helper at `~/.copilot/hooks/goal-context.sh` and merges hook entries into `~/.copilot/settings.json`.
-5. Installs `~/.copilot/extensions/goal-system/bin/goalctl.mjs` as the local no-MCP fallback for goal status, open, update, and close.
-6. Removes legacy `goalSystem` server entries from old installs when they are present in parseable local config.
+5. Installs `~/.copilot/extensions/goal-system/bin/goalctl.mjs` as the local fallback for goal status, open, update, and close.
 
 For VS Code Copilot Chat, the installer:
 
 1. Installs `~/.copilot/agents/goal-system.agent.md`.
 2. Installs `~/.copilot/hooks/goal-system-vscode.json`.
 3. Reuses the same package under `~/.copilot/extensions/goal-system/`, including `goalctl`.
-4. Removes legacy `goalSystem` server entries from old installs when they are present in parseable local config.
 
 The installer preserves existing settings and writes backups before changing JSON, JSONC, or Markdown files. Config backups keep the original file permissions, and newly created config files default to owner-only permissions.
 Copilot CLI `settings.json` may contain comments and trailing commas; the installer accepts it and keeps comments outside the exact config subtree it updates.
 If `settings.json` is malformed or is not a JSON object, the installer preserves the original as an `*.invalid-backup-*` file, recreates a clean JSON object, and then applies the goal-system entries.
-Old `goalSystem` server entries are removed on a best-effort cleanup path only; malformed legacy server config is left untouched because current installs do not read it.
+Current installs do not create server config. The runtime path is local hooks, direct tools, and `goalctl`.
 During updates, it recognizes existing goal hooks written with `~`, `$HOME`, `$COPILOT_HOME`, absolute paths, or wrapper commands. If a composite hook already runs `goal-context.sh`, the installer keeps that hook and avoids adding a duplicate direct goal hook.
 During updates, the installer prepares a fresh runtime and production dependencies in a temporary directory before replacing the installed runtime, so failed dependency installs leave the previous runtime in place.
 
@@ -219,7 +217,7 @@ Expected result: fail before a goal session fixes it. The runtime E2E prompt use
 ├── extension.mjs                         # Copilot SDK extension entrypoint
 ├── lib/goal-core.mjs                     # Goal state, validation, formatting, storage
 ├── adapters/vscode-chat                  # VS Code hooks and custom agent
-├── bin/goalctl.mjs                       # Local no-MCP goal command fallback
+├── bin/goalctl.mjs                       # Local goal command fallback
 ├── hooks/goal-context.sh                 # CLI lifecycle hook helper
 ├── skills/goal/SKILL.md                  # Goal-mode instruction contract
 ├── instructions/copilot-instructions.goal-snippet.md

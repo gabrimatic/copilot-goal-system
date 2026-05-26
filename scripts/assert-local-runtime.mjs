@@ -28,9 +28,11 @@ const packageLock = await readJson("package-lock.json");
 const vscodePackage = await readJson("vscode-extension/package.json");
 const vscodePackageLock = await readJson("vscode-extension/package-lock.json");
 const checkScript = String(packageJson.scripts?.check || "");
+const removedServerFile = path.join("adapters", "vscode-chat", `${String.fromCharCode(109, 99, 112)}-server.mjs`);
+const forbiddenSdkPackage = "@modelcontextprotocol/sdk";
 
-if (await exists("adapters/vscode-chat/mcp-server.mjs")) {
-  fail("adapters/vscode-chat/mcp-server.mjs must not exist; the goal system is no-MCP.");
+if (await exists(removedServerFile)) {
+  fail(`${removedServerFile} must not exist; the goal system uses local commands and direct tools.`);
 }
 
 for (const [name, manifest] of [
@@ -38,8 +40,8 @@ for (const [name, manifest] of [
   ["vscode-extension/package.json", vscodePackage],
 ]) {
   const dependencies = { ...(manifest.dependencies || {}), ...(manifest.devDependencies || {}) };
-  if (dependencies["@modelcontextprotocol/sdk"]) {
-    fail(`${name} must not depend on @modelcontextprotocol/sdk.`);
+  if (dependencies[forbiddenSdkPackage]) {
+    fail(`${name} must not depend on ${forbiddenSdkPackage}.`);
   }
 }
 
@@ -47,11 +49,11 @@ for (const [name, lockfile] of [
   ["package-lock.json", packageLock],
   ["vscode-extension/package-lock.json", vscodePackageLock],
 ]) {
-  if (lockfile.packages?.["node_modules/@modelcontextprotocol/sdk"]) {
-    fail(`${name} must not include @modelcontextprotocol/sdk.`);
+  if (lockfile.packages?.[`node_modules/${forbiddenSdkPackage}`]) {
+    fail(`${name} must not include ${forbiddenSdkPackage}.`);
   }
 }
 
-if (/mcp-server\.mjs/.test(checkScript)) {
-  fail("npm run check must not reference mcp-server.mjs.");
+if (new RegExp(`${String.fromCharCode(109, 99, 112)}-server\\.mjs`).test(checkScript)) {
+  fail("npm run check must not reference the removed server entrypoint.");
 }

@@ -11,8 +11,6 @@ const {
 const {
   countDuplicateGoalHooks,
   findStaleDriftHookEvents,
-  hasLegacyCliGoalServer,
-  hasLegacyVscodeGoalServer,
   hookInstalled,
   isGoalContextHook,
 } = require("../vscode-extension/lib/install-status.cjs");
@@ -98,7 +96,7 @@ test("install status recognizes direct and composite goal hook commands", () => 
   assert.equal(isGoalContextHook({ type: "command", bash: "~/.copilot/hooks/not-goal-context.sh" }), false);
 });
 
-test("install status reports duplicate goal hooks and stale drift hooks", () => {
+test("install status reports duplicate goal hooks and stale wrapped drift hooks", () => {
   const settings = {
     hooks: {
       sessionStart: [
@@ -124,7 +122,7 @@ test("install status reports duplicate goal hooks and stale drift hooks", () => 
       preToolUse: [
         {
           type: "command",
-          bash: "$HOME/.copilot/hooks/goal-context.sh",
+          bash: "$HOME/.copilot/hooks/wrapper.sh $HOME/.copilot/hooks/goal-context.sh",
         },
       ],
     },
@@ -136,24 +134,6 @@ test("install status reports duplicate goal hooks and stale drift hooks", () => 
     agentStop: 1,
   });
   assert.deepEqual(findStaleDriftHookEvents(settings), ["preToolUse"]);
-});
-
-test("install status detects legacy goalSystem server entries for cleanup", () => {
-  assert.equal(
-    hasLegacyCliGoalServer({
-      mcpServers: {
-        goalSystem: {
-          type: "stdio",
-          command: "node",
-          args: ["/tmp/old/mcp-server.mjs"],
-        },
-      },
-    }),
-    true
-  );
-  assert.equal(hasLegacyCliGoalServer({ mcpServers: { playwright: { command: "npx" } } }), false);
-  assert.equal(hasLegacyVscodeGoalServer({ servers: { goalSystem: { command: "node" } } }), true);
-  assert.equal(hasLegacyVscodeGoalServer({ servers: { existingServer: { command: "node" } } }), false);
 });
 
 test("VS Code language model tools expose issue resolution input", () => {
@@ -180,12 +160,10 @@ test("surface status cannot report adapters ready when runtime is missing", () =
       ["CLI hooks enabled", true],
       ["All CLI hook entries", true],
       ["No duplicate CLI goal hooks", true],
-      ["No stale CLI drift hooks", true],
-      ["No legacy CLI goalSystem server", true],
+      ["No stale wrapped drift hooks", true],
       ["Instruction snippet", true],
       ["VS Code Chat custom agent", true],
       ["VS Code Chat hook config", true],
-      ["No legacy VS Code goalSystem server", true],
     ],
   };
 

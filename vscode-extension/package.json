@@ -2,7 +2,7 @@
   "name": "copilot-goal-system",
   "displayName": "Copilot Goal System",
   "description": "Install persisted goal mode for GitHub Copilot CLI and VS Code Copilot Chat.",
-  "version": "1.1.17",
+  "version": "1.1.18",
   "publisher": "gabrimatic",
   "author": {
     "name": "Soroush Yousefpour",
@@ -568,7 +568,7 @@
           {
             "id": "install",
             "title": "Install or update the local goal system",
-            "description": "Copy the bundled goal system, install production dependencies, merge CLI hooks, add the VS Code Chat custom agent, and install local no-MCP goal tools.",
+            "description": "Copy the bundled goal system, install production dependencies, merge CLI hooks, add the VS Code Chat custom agent, and install local goal tools.",
             "media": {
               "image": "media/walkthrough-install.svg",
               "altText": "Goal system install flow"
@@ -580,7 +580,7 @@
           {
             "id": "status",
             "title": "Check installation status",
-            "description": "Confirm extension files, dependencies, CLI hooks, VS Code Chat hooks, custom agent, goalctl, and legacy server cleanup.",
+            "description": "Confirm extension files, dependencies, CLI hooks, VS Code Chat hooks, custom agent, and goalctl.",
             "media": {
               "image": "media/walkthrough-status.svg",
               "altText": "Goal system status checks"

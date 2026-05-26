@@ -16,8 +16,6 @@ const { copilotRootForHome } = require("./lib/copilot-paths.cjs");
 const {
   countDuplicateGoalHooks,
   findStaleDriftHookEvents,
-  hasLegacyCliGoalServer,
-  hasLegacyVscodeGoalServer,
   hookInstalled,
 } = require("./lib/install-status.cjs");
 const { parseJsoncText } = require("./lib/jsonc-file.cjs");
@@ -32,6 +30,8 @@ const CLI_HOOK_EVENTS = [
   "agentStop",
   "subagentStart",
   "subagentStop",
+  "preToolUse",
+  "postToolUse",
   "postToolUseFailure",
   "notification",
 ];
@@ -53,11 +53,10 @@ const CLI_CHECK_LABELS = [
   "CLI hooks enabled",
   "All CLI hook entries",
   "No duplicate CLI goal hooks",
-  "No stale CLI drift hooks",
-  "No legacy CLI goalSystem server",
+  "No stale wrapped drift hooks",
   "Instruction snippet",
 ];
-const VSCODE_CHAT_CHECK_LABELS = ["VS Code Chat custom agent", "VS Code Chat hook config", "No legacy VS Code goalSystem server"];
+const VSCODE_CHAT_CHECK_LABELS = ["VS Code Chat custom agent", "VS Code Chat hook config"];
 
 let installInProgress = false;
 
@@ -123,26 +122,11 @@ function installedPaths() {
     hookFile: path.join(copilotRoot, "hooks", "goal-context.sh"),
     vscodeHookConfigFile: path.join(copilotRoot, "hooks", "goal-system-vscode.json"),
     vscodeAgentFile: path.join(copilotRoot, "agents", "goal-system.agent.md"),
-    legacyCliMcpConfigFile: path.join(copilotRoot, "mcp-config.json"),
-    legacyVscodeMcpConfigFile: legacyVscodeMcpConfigPath(home),
     settingsFile: path.join(copilotRoot, "settings.json"),
     instructionsFile: path.join(copilotRoot, "copilot-instructions.md"),
     sdkPackage: path.join(copilotRoot, "extensions", "goal-system", "node_modules", "@github", "copilot-sdk", "package.json"),
     stateRoot: path.join(copilotRoot, "session-state", "goal-system"),
   };
-}
-
-function legacyVscodeMcpConfigPath(home) {
-  if (process.platform === "win32") {
-    return path.join(process.env.APPDATA || path.join(home, "AppData", "Roaming"), "Code", "User", "mcp.json");
-  }
-  if (process.platform === "darwin") {
-    const appName = String(vscode.env.appName || "");
-    const productDir = /insiders/i.test(appName) ? "Code - Insiders" : "Code";
-    return path.join(home, "Library", "Application Support", productDir, "User", "mcp.json");
-  }
-  const productDir = /insiders/i.test(String(vscode.env.appName || "")) ? "Code - Insiders" : "Code";
-  return path.join(process.env.XDG_CONFIG_HOME || path.join(home, ".config"), productDir, "User", "mcp.json");
 }
 
 function bundleRoot(context) {
@@ -377,10 +361,6 @@ async function collectStatus() {
   let settingsError = "";
   let vscodeHookConfig = null;
   let vscodeHookConfigError = "";
-  let legacyVscodeConfig = null;
-  let legacyVscodeConfigError = "";
-  let legacyCliConfig = null;
-  let legacyCliConfigError = "";
 
   if (installedPackagePresent) {
     try {
@@ -412,28 +392,10 @@ async function collectStatus() {
     }
   }
 
-  if (await exists(paths.legacyVscodeMcpConfigFile)) {
-    try {
-      legacyVscodeConfig = await readJson(paths.legacyVscodeMcpConfigFile);
-    } catch (error) {
-      legacyVscodeConfigError = error && error.message ? error.message : "VS Code server config could not be parsed";
-    }
-  }
-
-  if (await exists(paths.legacyCliMcpConfigFile)) {
-    try {
-      legacyCliConfig = await readJson(paths.legacyCliMcpConfigFile);
-    } catch (error) {
-      legacyCliConfigError = error && error.message ? error.message : "Copilot CLI server config could not be parsed";
-    }
-  }
-
   const cliHookEventsPresent = settings ? CLI_HOOK_EVENTS.filter((eventName) => hookInstalled(settings, eventName)) : [];
   const duplicateCliGoalHooks = settings ? countDuplicateGoalHooks(settings, CLI_HOOK_EVENTS) : {};
   const staleCliDriftHookEvents = settings ? findStaleDriftHookEvents(settings) : [];
   const cliHooksDisabled = Boolean(settings && settings.disableAllHooks);
-  const legacyCliGoalServerPresent = legacyCliConfig ? hasLegacyCliGoalServer(legacyCliConfig) : false;
-  const legacyVscodeGoalServerPresent = legacyVscodeConfig ? hasLegacyVscodeGoalServer(legacyVscodeConfig) : false;
 
   return {
     paths,
@@ -451,25 +413,19 @@ async function collectStatus() {
       ["CLI hooks enabled", Boolean(settings) && !cliHooksDisabled],
       ["All CLI hook entries", cliHookEventsPresent.length === CLI_HOOK_EVENTS.length],
       ["No duplicate CLI goal hooks", Object.keys(duplicateCliGoalHooks).length === 0],
-      ["No stale CLI drift hooks", staleCliDriftHookEvents.length === 0],
-      ["No legacy CLI goalSystem server", !legacyCliGoalServerPresent],
+      ["No stale wrapped drift hooks", staleCliDriftHookEvents.length === 0],
       ["Instruction snippet", await instructionsSnippetInstalled(paths.instructionsFile)],
       ["VS Code Chat custom agent", await exists(paths.vscodeAgentFile)],
       ["VS Code Chat hook config", vscodeHookConfigInstalled(vscodeHookConfig)],
-      ["No legacy VS Code goalSystem server", !legacyVscodeGoalServerPresent],
     ],
     cliHookEventsPresent,
     duplicateCliGoalHooks,
     staleCliDriftHookEvents,
     cliHooksDisabled,
-    legacyCliGoalServerPresent,
     vscodeHookConfigInstalled: vscodeHookConfigInstalled(vscodeHookConfig),
-    legacyVscodeGoalServerPresent,
     installedPackageError,
     settingsError,
     vscodeHookConfigError,
-    legacyVscodeConfigError,
-    legacyCliConfigError,
   };
 }
 
@@ -507,8 +463,6 @@ function formatStatusReport(status) {
     `CLI hook entries: ${status.cliHookEventsPresent.length}/${CLI_HOOK_EVENTS.length}`,
     `CLI hooks disabled: ${status.cliHooksDisabled ? "Yes" : "No"}`,
     `VS Code hook config: ${status.vscodeHookConfigInstalled ? "Installed" : "Needs attention"}`,
-    `Legacy CLI goalSystem server: ${status.legacyCliGoalServerPresent ? "Present" : "Absent"}`,
-    `Legacy VS Code goalSystem server: ${status.legacyVscodeGoalServerPresent ? "Present" : "Absent"}`,
   ];
 
   const duplicateEvents = Object.entries(status.duplicateCliGoalHooks || {});
@@ -528,12 +482,6 @@ function formatStatusReport(status) {
   }
   if (status.vscodeHookConfigError) {
     lines.push("", `VS Code hook config error: ${status.vscodeHookConfigError}`);
-  }
-  if (status.legacyCliConfigError) {
-    lines.push("", `Legacy CLI server config note: ${status.legacyCliConfigError}`);
-  }
-  if (status.legacyVscodeConfigError) {
-    lines.push("", `Legacy VS Code server config note: ${status.legacyVscodeConfigError}`);
   }
 
   if (!installed && missing.length > 0) {

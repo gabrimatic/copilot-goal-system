@@ -43,6 +43,20 @@
         "timeoutSec": 5
       }
     ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "$HOME/.copilot/hooks/goal-context.sh",
+        "timeoutSec": 5
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "$HOME/.copilot/hooks/goal-context.sh",
+        "timeoutSec": 5
+      }
+    ],
     "postToolUseFailure": [
       {
         "type": "command",

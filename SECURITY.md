@@ -21,7 +21,7 @@ The state model redacts common secrets, emails, tokens, passwords, API keys, bea
 
 | Surface | Permission | Scope |
 |---------|------------|-------|
-| Installer | Filesystem writes | `~/.copilot/extensions/goal-system`, `~/.copilot/skills/goal`, `~/.copilot/agents`, `~/.copilot/hooks`, `~/.copilot/settings.json`, `~/.copilot/copilot-instructions.md`; legacy `goalSystem` server entries are removed from old local config when parseable |
+| Installer | Filesystem writes | `~/.copilot/extensions/goal-system`, `~/.copilot/skills/goal`, `~/.copilot/agents`, `~/.copilot/hooks`, `~/.copilot/settings.json`, `~/.copilot/copilot-instructions.md` |
 | Extension | Filesystem writes | Local install files and goal state under `~/.copilot/session-state/goal-system` |
 | Hook | Filesystem reads/writes | Reads goal state, writes compact snapshots and tool-history summaries |
 | goalctl | Filesystem reads/writes | Reads and updates local goal state when direct goal tools are unavailable |

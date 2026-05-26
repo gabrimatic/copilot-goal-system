@@ -23,7 +23,7 @@ The Marketplace **Install** button installs the VS Code extension. The command i
 - a short reminder in `~/.copilot/copilot-instructions.md`
 
 The installer preserves existing Copilot settings and writes backups before changing files. It accepts JSONC in Copilot CLI `settings.json`, including comments and trailing commas. If that settings file is malformed or is not a JSON object, the installer preserves the original as an `*.invalid-backup-*` file, recreates a clean JSON object, and then applies the goal-system entries. Config backups keep the original file permissions, and newly created config files default to owner-only permissions. Runtime updates prepare dependencies before swapping the installed local runtime, so failed dependency installs leave the previous runtime in place. On first startup, VS Code offers a one-time setup prompt and a compact status bar item.
-Older `goalSystem` server entries from previous releases are removed when their local config files are parseable. Current installs do not create or rely on any MCP server.
+Current installs use local hooks, direct VS Code tools, and `goalctl`; they do not create server config.
 
 After extension updates, VS Code compares the extension bundle with the installed files in `~/.copilot/extensions/goal-system/`. If the local runtime is stale, the status bar changes to `Goal Update` and VS Code prompts you to update the local Copilot files. Updates replace the installed runtime snapshot so stale files from older releases do not remain active.
 
@@ -43,7 +43,7 @@ Open the Command Palette and run:
 - `Copilot Goal System: Install Recommended Setup` installs the CLI and VS Code Chat adapters.
 - `Copilot Goal System: Install into Copilot CLI` installs only the CLI adapter.
 - `Copilot Goal System: Install into VS Code Copilot Chat` installs only the VS Code Chat adapter.
-- `Copilot Goal System: Show Status` checks the package, dependencies, CLI hooks, VS Code hooks, custom agent, goalctl, legacy cleanup, and instruction snippet.
+- `Copilot Goal System: Show Status` checks the package, dependencies, CLI hooks, VS Code hooks, custom agent, goalctl, and instruction snippet.
 - `Copilot Goal System: Open Setup Walkthrough` opens the guided VS Code setup steps.
 - `Copilot Goal System: Copy Test Prompt` copies a fixture prompt for testing the full goal loop.
 - `Copilot Goal System: Open Documentation` opens the source documentation.
