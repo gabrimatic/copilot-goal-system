@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.19
+
+- Makes bundled goal audit writes deterministic so local `goalctl close` records the close event before the process exits.
+- Adds release coverage for immediate close-audit durability after an evidence-backed completion.
+
 ## 1.1.18
 
 - Removes the remaining legacy server cleanup/status surface from the Marketplace bundle.

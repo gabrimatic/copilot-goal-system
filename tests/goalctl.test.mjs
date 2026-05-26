@@ -99,3 +99,45 @@ test("goalctl refuses weak completion evidence", async () => {
 
   await rm(home, { recursive: true, force: true });
 });
+
+test("goalctl close durably records audit before process exit", async () => {
+  const home = await mkdtemp(path.join(tmpdir(), "goalctl-close-audit-"));
+  const cwd = path.join(home, "project");
+  await mkdir(cwd, { recursive: true });
+  const env = { ...process.env, HOME: home };
+
+  await runGoalctl([
+    "open",
+    "--session-id",
+    "session-close-audit",
+    "--cwd",
+    cwd,
+    "--objective",
+    "Close with an immediate audit trail",
+  ], { env });
+
+  await runGoalctl([
+    "close",
+    "--session-id",
+    "session-close-audit",
+    "--cwd",
+    cwd,
+    "--status",
+    "complete",
+    "--done",
+    "Verified close audit durability",
+    "--inspection",
+    "Inspected the persisted audit log immediately after goalctl close exited",
+    "--validation",
+    "goalctl close accepted only after evidence fields were present",
+    "--verification",
+    "The audit log contained goalctl_close without waiting for another process",
+    "--audit",
+    "No remaining work, no blockers, and durable audit evidence present",
+  ], { env });
+
+  const auditLog = await readFile(path.join(home, ".copilot", "session-state", "goal-system", "audit.log"), "utf8");
+  assert.match(auditLog, /"e":"goalctl_close"/);
+
+  await rm(home, { recursive: true, force: true });
+});

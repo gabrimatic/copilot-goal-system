@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.19
+
+- Makes goal audit writes deterministic so `goalctl close` records the close event before the CLI process exits.
+- Adds regression coverage for immediate close-audit durability after an evidence-backed completion.
+
 ## 1.1.18
 
 - Removes the remaining legacy server cleanup path from install, doctor, status, docs, and tests so current runtime setup is local commands, direct tools, and lifecycle hooks only.
