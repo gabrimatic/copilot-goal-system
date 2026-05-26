@@ -2,7 +2,7 @@
   "name": "copilot-goal-system",
   "displayName": "Copilot Goal System",
   "description": "Install persisted goal mode for GitHub Copilot CLI and VS Code Copilot Chat.",
-  "version": "1.1.16",
+  "version": "1.1.17",
   "publisher": "gabrimatic",
   "author": {
     "name": "Soroush Yousefpour",
@@ -49,7 +49,7 @@
     "verification"
   ],
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.95.0"
   },
   "extensionKind": [
     "ui"
@@ -158,15 +158,407 @@
           "type": "boolean",
           "default": true,
           "description": "Show the compact Copilot Goal System item in the VS Code status bar."
-        },
-        "copilotGoalSystem.vscodeMcpConfigPathOverride": {
-          "type": "string",
-          "default": "",
-          "scope": "machine",
-          "description": "Set a custom VS Code MCP config path. Leave empty to use the detected VS Code profile path."
         }
       }
     },
+    "languageModelTools": [
+      {
+        "name": "goal_system_status",
+        "displayName": "Goal System Status",
+        "toolReferenceName": "goalStatus",
+        "icon": "$(target)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Read the persisted active goal state for this VS Code session.",
+        "modelDescription": "Read the persisted active goal state for the main VS Code Copilot Chat session. Requires sessionId and cwd from Goal System hook context.",
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "sessionId",
+            "cwd"
+          ],
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Session ID from the Goal System hook context."
+            },
+            "cwd": {
+              "type": "string",
+              "description": "Working directory from the Goal System hook context."
+            }
+          }
+        }
+      },
+      {
+        "name": "goal_system_open",
+        "displayName": "Goal System Open",
+        "toolReferenceName": "goalOpen",
+        "icon": "$(target)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Create or replace a persisted goal for this VS Code session.",
+        "modelDescription": "Create or replace the persisted active goal for the main VS Code Copilot Chat session. Use replaceExisting only when the user clearly replaced the current goal.",
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "sessionId",
+            "cwd",
+            "objective"
+          ],
+          "properties": {
+            "sessionId": {
+              "type": "string"
+            },
+            "cwd": {
+              "type": "string"
+            },
+            "objective": {
+              "type": "string"
+            },
+            "requirements": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "scope": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "constraints": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "doneSoFar": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "remaining": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "blockers": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "completionStatus": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "active",
+                "blocked"
+              ]
+            },
+            "replaceExisting": {
+              "type": "boolean"
+            },
+            "sourcePrompt": {
+              "type": "string"
+            },
+            "historyNote": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "goal_system_update",
+        "displayName": "Goal System Update",
+        "toolReferenceName": "goalUpdate",
+        "icon": "$(edit)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Update persisted goal evidence, progress, blockers, or remaining work.",
+        "modelDescription": "Update the persisted active goal with verified facts, inspection evidence, discovered or resolved issues, verification results, blockers, and remaining work.",
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "sessionId",
+            "cwd"
+          ],
+          "properties": {
+            "sessionId": {
+              "type": "string"
+            },
+            "cwd": {
+              "type": "string"
+            },
+            "objective": {
+              "type": "string"
+            },
+            "requirements": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "inspectionEvidence": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "discoveredIssues": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "resolvedIssues": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "issueResolutions": {
+              "type": "array",
+              "description": "Evidence-backed coverage for discovered issues whose resolution wording differs from the original issue text.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "covers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "issue": {
+                    "type": "string"
+                  },
+                  "originalIssue": {
+                    "type": "string"
+                  },
+                  "target": {
+                    "type": "string"
+                  },
+                  "targetIssue": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "resolved",
+                      "merged",
+                      "renamed",
+                      "duplicate",
+                      "superseded"
+                    ]
+                  },
+                  "resolution": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "validationProof": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "verificationResults": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "requirementCoverage": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "doneSoFar": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "remaining": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "blockers": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "completionAudit": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "completionStatus": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "active",
+                "blocked"
+              ]
+            },
+            "historyNote": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "goal_system_close",
+        "displayName": "Goal System Close",
+        "toolReferenceName": "goalClose",
+        "icon": "$(pass)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Close the persisted goal after proof is recorded.",
+        "modelDescription": "Close the persisted goal as complete, blocked, or cancelled. Complete is refused unless evidence, verification, coverage, empty remaining work, and completion audit are recorded.",
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "sessionId",
+            "cwd",
+            "completionStatus"
+          ],
+          "properties": {
+            "sessionId": {
+              "type": "string"
+            },
+            "cwd": {
+              "type": "string"
+            },
+            "completionStatus": {
+              "type": "string",
+              "enum": [
+                "complete",
+                "blocked",
+                "cancelled"
+              ]
+            },
+            "summary": {
+              "type": "string"
+            },
+            "validationProof": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "verificationResults": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "requirementCoverage": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "inspectionEvidence": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "resolvedIssues": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "issueResolutions": {
+              "type": "array",
+              "description": "Evidence-backed coverage for discovered issues whose resolution wording differs from the original issue text.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "covers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "issue": {
+                    "type": "string"
+                  },
+                  "originalIssue": {
+                    "type": "string"
+                  },
+                  "target": {
+                    "type": "string"
+                  },
+                  "targetIssue": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "resolved",
+                      "merged",
+                      "renamed",
+                      "duplicate",
+                      "superseded"
+                    ]
+                  },
+                  "resolution": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "doneSoFar": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "remaining": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "blockers": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "completionAudit": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "historyNote": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    ],
     "walkthroughs": [
       {
         "id": "copilotGoalSystem.setup",
@@ -176,7 +568,7 @@
           {
             "id": "install",
             "title": "Install or update the local goal system",
-            "description": "Copy the bundled goal system, install production dependencies, merge CLI hooks, add the VS Code Chat custom agent, and configure the local MCP server.",
+            "description": "Copy the bundled goal system, install production dependencies, merge CLI hooks, add the VS Code Chat custom agent, and install local no-MCP goal tools.",
             "media": {
               "image": "media/walkthrough-install.svg",
               "altText": "Goal system install flow"
@@ -188,7 +580,7 @@
           {
             "id": "status",
             "title": "Check installation status",
-            "description": "Confirm extension files, dependencies, CLI hooks, VS Code Chat hooks, custom agent, and MCP configuration.",
+            "description": "Confirm extension files, dependencies, CLI hooks, VS Code Chat hooks, custom agent, goalctl, and legacy server cleanup.",
             "media": {
               "image": "media/walkthrough-status.svg",
               "altText": "Goal system status checks"

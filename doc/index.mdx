@@ -32,7 +32,7 @@ curl -fsSL https://gabrimatic.github.io/copilot-goal-system/install.sh | bash -s
 |------|--------------|
 | Goal tools | `goal_system_open`, `goal_system_status`, `goal_system_update`, and `goal_system_close` create, reload, update, and close persisted goals. Completion is refused without proof. |
 | Lifecycle hooks | Restore goal context, write compact snapshots, block premature stop, warn on stale non-goal tool drift, and keep subagents outside goal ownership. |
-| VS Code Chat adapter | Adds the `Goal System` custom agent, VS Code hook config, and local `goalSystem` MCP server. |
+| VS Code Chat adapter | Adds the `Goal System` custom agent, VS Code hook config, direct VS Code goal tools, and local `goalctl` fallback. |
 | Goal contract | Installs the `goal` skill and instruction snippet so Copilot knows the work is execution, not a loose reminder. |
 
 ## Default behavior

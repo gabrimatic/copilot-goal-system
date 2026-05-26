@@ -14,10 +14,11 @@ npm run check
 Covered:
 
 - `node --check extension.mjs`
+- `node --check bin/goalctl.mjs`
 - `node --check lib/goal-core.mjs`
 - `node --check adapters/vscode-chat/hook-runner.mjs`
-- `node --check adapters/vscode-chat/mcp-server.mjs`
 - `node --check scripts/install.mjs`
+- no-MCP runtime guard through `scripts/assert-no-mcp-runtime.mjs`
 - shell syntax checks
 - JSON validation for manifests and hook config
 
@@ -55,7 +56,7 @@ Covered:
 - VS Code Chat prompt activation and continuation
 - VS Code Chat stop blocking
 - VS Code Chat persisted drift tracking
-- VS Code Chat installer MCP merge behavior
+- VS Code Chat installer direct-tool and legacy-cleanup behavior
 - VS Code extension runtime update-state detection
 
 ## Fixture sanity check

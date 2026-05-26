@@ -8,10 +8,10 @@ import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 const {
-  cliMcpServerDetails,
-  cliMcpServerInstalled,
   countDuplicateGoalHooks,
   findStaleDriftHookEvents,
+  hasLegacyCliGoalServer,
+  hasLegacyVscodeGoalServer,
   hookInstalled,
 } = require("../lib/install-status.cjs");
 const { parseJsoncText } = require("../lib/jsonc-file.cjs");
@@ -36,7 +36,7 @@ function parseArgs(argv) {
     cwd: process.cwd(),
     target: "cli",
     json: false,
-    vscodeMcpConfigPath: process.env.GOAL_SYSTEM_VSCODE_MCP_CONFIG_PATH || "",
+    legacyVscodeMcpConfigPath: process.env.GOAL_SYSTEM_VSCODE_MCP_CONFIG_PATH || "",
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -58,10 +58,10 @@ function parseArgs(argv) {
     } else if (arg.startsWith("--target=")) {
       options.target = arg.slice("--target=".length);
     } else if (arg === "--vscode-mcp-config") {
-      options.vscodeMcpConfigPath = argv[index + 1] || options.vscodeMcpConfigPath;
+      options.legacyVscodeMcpConfigPath = argv[index + 1] || options.legacyVscodeMcpConfigPath;
       index += 1;
     } else if (arg.startsWith("--vscode-mcp-config=")) {
-      options.vscodeMcpConfigPath = arg.slice("--vscode-mcp-config=".length);
+      options.legacyVscodeMcpConfigPath = arg.slice("--vscode-mcp-config=".length);
     }
   }
   if (!["cli", "vscode-chat", "all"].includes(options.target)) {
@@ -91,7 +91,7 @@ async function readJsonIfExists(filePath) {
   }
 }
 
-function defaultVscodeMcpConfigPath(home, override = "") {
+function legacyVscodeMcpConfigPath(home, override = "") {
   if (override) return path.resolve(override);
   if (process.platform === "win32") {
     return path.join(process.env.APPDATA || path.join(home, "AppData", "Roaming"), "Code", "User", "mcp.json");
@@ -122,37 +122,8 @@ function check(label, ok, details = "", remediation = "") {
   };
 }
 
-function resolveMaybePath(value, home = os.homedir()) {
-  const expanded = String(value || "").startsWith("~/") ? path.join(home, String(value || "").slice(2)) : String(value || "");
-  return path.isAbsolute(expanded) ? path.normalize(expanded) : path.resolve(expanded);
-}
-
-function vscodeMcpServerDetails(config, options = {}) {
-  const server = config && config.servers && config.servers.goalSystem;
-  if (!server || !Array.isArray(server.args)) return { ok: false, reason: "goalSystem server is missing or has no args" };
-  if (server.type !== "stdio") return { ok: false, reason: `goalSystem type is ${server.type || "missing"}` };
-  if (!server.command) return { ok: false, reason: "goalSystem command is missing" };
-  const scriptArg = server.args.find((arg) => /mcp-server\.mjs$/.test(String(arg)));
-  if (!scriptArg) return { ok: false, reason: "goalSystem args do not point at mcp-server.mjs" };
-  const scriptPath = resolveMaybePath(scriptArg, options.home);
-  const expectedScriptPath = options.expectedScriptPath ? resolveMaybePath(options.expectedScriptPath, options.home) : "";
-  if (expectedScriptPath && scriptPath !== expectedScriptPath) {
-    return { ok: false, reason: `goalSystem points at ${scriptPath}, expected ${expectedScriptPath}`, command: server.command, args: server.args, env: server.env || {}, scriptPath };
-  }
-  return { ok: true, reason: "configured", command: server.command, args: server.args, env: server.env || {}, scriptPath };
-}
-
 function profileEnv(home) {
   return { ...process.env, HOME: home, USERPROFILE: home, COPILOT_HOME: copilotRootForHome(home) };
-}
-
-function mcpConfigSelfTest(details, home) {
-  if (!details.ok) {
-    return { ok: false, status: 1, stdout: "", stderr: details.reason || "MCP server is not configured", error: "" };
-  }
-  return run(details.command, [...details.args, "--self-test"], {
-    env: { ...profileEnv(home), ...(details.env || {}) },
-  });
 }
 
 async function main() {
@@ -160,28 +131,28 @@ async function main() {
   const copilotRoot = copilotRootForHome(options.home);
   const extensionDir = path.join(copilotRoot, "extensions", "goal-system");
   const settingsPath = path.join(copilotRoot, "settings.json");
-  const cliMcpConfigPath = path.join(copilotRoot, "mcp-config.json");
-  const vscodeMcpConfigPath = defaultVscodeMcpConfigPath(options.home, options.vscodeMcpConfigPath);
-  const mcpServerPath = path.join(extensionDir, "adapters", "vscode-chat", "mcp-server.mjs");
+  const legacyCliMcpConfigPath = path.join(copilotRoot, "mcp-config.json");
+  const legacyVscodeConfigPath = legacyVscodeMcpConfigPath(options.home, options.legacyVscodeMcpConfigPath);
+  const goalctlPath = path.join(extensionDir, "bin", "goalctl.mjs");
 
   const settings = await readJsonIfExists(settingsPath);
-  const cliMcpConfig = await readJsonIfExists(cliMcpConfigPath);
-  const vscodeMcpConfig = await readJsonIfExists(vscodeMcpConfigPath);
+  const cliMcpConfig = await readJsonIfExists(legacyCliMcpConfigPath);
+  const vscodeMcpConfig = await readJsonIfExists(legacyVscodeConfigPath);
   const installedPackage = await readJsonIfExists(path.join(extensionDir, "package.json"));
   const copilotVersion = run("copilot", ["--version"], { env: profileEnv(options.home) });
   const jqVersion = run("jq", ["--version"], { env: profileEnv(options.home) });
-  const cliMcpDetails = cliMcpServerDetails(cliMcpConfig.value, { home: options.home, expectedScriptPath: mcpServerPath });
-  const vscodeMcpDetails = vscodeMcpServerDetails(vscodeMcpConfig.value, { home: options.home, expectedScriptPath: mcpServerPath });
-  const cliMcpSelfTest = mcpConfigSelfTest(cliMcpDetails, options.home);
-  const vscodeMcpSelfTest = mcpConfigSelfTest(vscodeMcpDetails, options.home);
-  const copilotMcpGet = copilotVersion.ok ? run("copilot", ["mcp", "get", "goalSystem", "--json"], { env: profileEnv(options.home) }) : { ok: false, stderr: "Copilot CLI command is unavailable" };
+  const goalctlSelfTest = run(process.execPath, [goalctlPath, "--self-test"], { env: profileEnv(options.home) });
 
   const cliHookEventsPresent = settings.value ? CLI_HOOK_EVENTS.filter((eventName) => hookInstalled(settings.value, eventName)) : [];
   const duplicateCliGoalHooks = settings.value ? countDuplicateGoalHooks(settings.value, CLI_HOOK_EVENTS) : {};
   const staleCliDriftHookEvents = settings.value ? findStaleDriftHookEvents(settings.value) : [];
+  const legacyCliGoalServerPresent = cliMcpConfig.value ? hasLegacyCliGoalServer(cliMcpConfig.value) : false;
+  const legacyVscodeGoalServerPresent = vscodeMcpConfig.value ? hasLegacyVscodeGoalServer(vscodeMcpConfig.value) : false;
   const cliChecks = [
     check("Copilot CLI command", copilotVersion.ok, copilotVersion.stdout || copilotVersion.stderr || copilotVersion.error, "Install or repair GitHub Copilot CLI."),
     check("Installed runtime package", installedPackage.value?.version === packageJson.version, installedPackage.value?.version || "missing", "Run ./install.sh --target cli."),
+    check("Local goalctl command", await exists(goalctlPath), goalctlPath, "Run ./install.sh --target cli."),
+    check("goalctl self-test", goalctlSelfTest.ok, goalctlSelfTest.stdout || goalctlSelfTest.stderr || goalctlSelfTest.error, "Run ./install.sh --target cli."),
     check("Goal skill file", await exists(path.join(copilotRoot, "skills", "goal", "SKILL.md")), path.join(copilotRoot, "skills", "goal", "SKILL.md"), "Run ./install.sh --target cli."),
     check("CLI hook helper", await exists(path.join(copilotRoot, "hooks", "goal-context.sh")), path.join(copilotRoot, "hooks", "goal-context.sh"), "Run ./install.sh --target cli."),
     check("CLI hook parser dependency", jqVersion.ok, jqVersion.stdout || jqVersion.stderr || jqVersion.error || "jq unavailable", "Install jq, then restart Copilot CLI."),
@@ -190,14 +161,15 @@ async function main() {
     check("All CLI lifecycle hooks", cliHookEventsPresent.length === CLI_HOOK_EVENTS.length, `${cliHookEventsPresent.length}/${CLI_HOOK_EVENTS.length}`, "Run ./install.sh --target cli, then restart Copilot CLI."),
     check("No duplicate CLI goal hooks", Object.keys(duplicateCliGoalHooks).length === 0, JSON.stringify(duplicateCliGoalHooks), "Run ./install.sh --target cli to normalize direct duplicates."),
     check("No stale hard drift hooks", staleCliDriftHookEvents.length === 0, staleCliDriftHookEvents.join(", ") || "none", "Run ./install.sh --target cli to remove stale preToolUse/postToolUse goal hooks."),
-    check("Copilot CLI MCP goal server", cliMcpServerInstalled(cliMcpConfig.value, { home: options.home, expectedScriptPath: mcpServerPath }), cliMcpDetails.ok ? cliMcpDetails.scriptPath : cliMcpDetails.reason, "Run ./install.sh --target cli, then use /mcp show in Copilot CLI."),
-    check("Configured CLI MCP self-test", cliMcpSelfTest.ok, cliMcpSelfTest.stdout || cliMcpSelfTest.stderr || cliMcpSelfTest.error, "Run npm ci and ./install.sh --target cli."),
-    check("Copilot CLI loads goalSystem MCP", copilotMcpGet.ok, copilotMcpGet.stdout || copilotMcpGet.stderr || copilotMcpGet.error, "Run copilot mcp get goalSystem --json. If missing, rerun ./install.sh --target cli and restart Copilot CLI."),
+    check("No legacy CLI goalSystem server", !legacyCliGoalServerPresent, cliMcpConfig.error || (legacyCliGoalServerPresent ? legacyCliMcpConfigPath : "none"), "Run ./install.sh --target cli to remove the old goalSystem server entry."),
   ];
   const vscodeChecks = [
     check("Installed runtime package", installedPackage.value?.version === packageJson.version, installedPackage.value?.version || "missing", "Run ./install.sh --target all."),
-    check("VS Code MCP goal server", vscodeMcpDetails.ok, vscodeMcpDetails.ok ? vscodeMcpDetails.scriptPath : vscodeMcpDetails.reason, "Run ./install.sh --target vscode-chat and reload VS Code."),
-    check("Configured VS Code MCP self-test", vscodeMcpSelfTest.ok, vscodeMcpSelfTest.stdout || vscodeMcpSelfTest.stderr || vscodeMcpSelfTest.error, "Run npm ci and ./install.sh --target all."),
+    check("Local goalctl command", await exists(goalctlPath), goalctlPath, "Run ./install.sh --target vscode-chat."),
+    check("goalctl self-test", goalctlSelfTest.ok, goalctlSelfTest.stdout || goalctlSelfTest.stderr || goalctlSelfTest.error, "Run ./install.sh --target vscode-chat."),
+    check("VS Code Chat custom agent", await exists(path.join(copilotRoot, "agents", "goal-system.agent.md")), path.join(copilotRoot, "agents", "goal-system.agent.md"), "Run ./install.sh --target vscode-chat."),
+    check("VS Code Chat hook config", await exists(path.join(copilotRoot, "hooks", "goal-system-vscode.json")), path.join(copilotRoot, "hooks", "goal-system-vscode.json"), "Run ./install.sh --target vscode-chat."),
+    check("No legacy VS Code goalSystem server", !legacyVscodeGoalServerPresent, vscodeMcpConfig.error || (legacyVscodeGoalServerPresent ? legacyVscodeConfigPath : "none"), "Run ./install.sh --target vscode-chat to remove the old goalSystem server entry."),
   ];
   const checks =
     options.target === "cli"
@@ -214,9 +186,10 @@ async function main() {
     paths: {
       copilotRoot,
       settingsPath,
-      cliMcpConfigPath,
-      vscodeMcpConfigPath,
+      legacyCliMcpConfigPath,
+      legacyVscodeConfigPath,
       extensionDir,
+      goalctlPath,
     },
     checks,
     ok: checks.every((item) => item.ok),

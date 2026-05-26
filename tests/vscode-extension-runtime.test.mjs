@@ -9,12 +9,14 @@ const {
   runtimeVersionState,
 } = require("../vscode-extension/lib/runtime-version.cjs");
 const {
-  cliMcpServerInstalled,
   countDuplicateGoalHooks,
   findStaleDriftHookEvents,
+  hasLegacyCliGoalServer,
+  hasLegacyVscodeGoalServer,
   hookInstalled,
   isGoalContextHook,
 } = require("../vscode-extension/lib/install-status.cjs");
+const vscodePackageJson = require("../vscode-extension/package.json");
 
 const originalLoad = Module._load;
 Module._load = function patchedLoad(request, parent, isMain) {
@@ -136,65 +138,32 @@ test("install status reports duplicate goal hooks and stale drift hooks", () => 
   assert.deepEqual(findStaleDriftHookEvents(settings), ["preToolUse"]);
 });
 
-test("install status recognizes Copilot CLI MCP goal server config", () => {
+test("install status detects legacy goalSystem server entries for cleanup", () => {
   assert.equal(
-    cliMcpServerInstalled({
-      mcpServers: {
-        goalSystem: {
-          type: "local",
-          command: "/usr/local/bin/node",
-          args: ["/Users/test/.copilot/extensions/goal-system/adapters/vscode-chat/mcp-server.mjs"],
-          tools: ["*"],
-        },
-      },
-    }),
-    true
-  );
-  assert.equal(
-    cliMcpServerInstalled(
-      {
-        mcpServers: {
-          goalSystem: {
-            type: "local",
-            command: "/usr/local/bin/node",
-            args: ["/tmp/dead/mcp-server.mjs"],
-            tools: ["*"],
-          },
-        },
-      },
-      {
-        expectedScriptPath: "/Users/test/.copilot/extensions/goal-system/adapters/vscode-chat/mcp-server.mjs",
-      }
-    ),
-    false
-  );
-
-  assert.equal(
-    cliMcpServerInstalled({
+    hasLegacyCliGoalServer({
       mcpServers: {
         goalSystem: {
           type: "stdio",
           command: "node",
-          args: ["/Users/test/.copilot/extensions/goal-system/adapters/vscode-chat/mcp-server.mjs"],
-          tools: ["goal_system_status", "goal_system_update"],
+          args: ["/tmp/old/mcp-server.mjs"],
         },
       },
     }),
     true
   );
+  assert.equal(hasLegacyCliGoalServer({ mcpServers: { playwright: { command: "npx" } } }), false);
+  assert.equal(hasLegacyVscodeGoalServer({ servers: { goalSystem: { command: "node" } } }), true);
+  assert.equal(hasLegacyVscodeGoalServer({ servers: { existingServer: { command: "node" } } }), false);
+});
 
-  assert.equal(
-    cliMcpServerInstalled({
-      mcpServers: {
-        goalSystem: {
-          type: "http",
-          url: "https://example.invalid/mcp",
-          tools: ["*"],
-        },
-      },
-    }),
-    false
-  );
+test("VS Code language model tools expose issue resolution input", () => {
+  const tools = new Map(vscodePackageJson.contributes.languageModelTools.map((tool) => [tool.name, tool]));
+  for (const toolName of ["goal_system_update", "goal_system_close"]) {
+    const issueResolutions = tools.get(toolName)?.inputSchema?.properties?.issueResolutions;
+    assert.equal(issueResolutions?.type, "array");
+    assert.equal(issueResolutions.items?.properties?.status?.enum.includes("renamed"), true);
+    assert.equal(issueResolutions.items?.properties?.evidence?.items?.type, "string");
+  }
 });
 
 test("surface status cannot report adapters ready when runtime is missing", () => {
@@ -204,7 +173,7 @@ test("surface status cannot report adapters ready when runtime is missing", () =
       ["Extension package", false],
       ["Local runtime version", false],
       ["Production dependencies", false],
-      ["Local MCP server file", false],
+      ["Local goalctl command", false],
       ["Goal skill", true],
       ["CLI hook helper", true],
       ["CLI settings JSON", true],
@@ -212,11 +181,11 @@ test("surface status cannot report adapters ready when runtime is missing", () =
       ["All CLI hook entries", true],
       ["No duplicate CLI goal hooks", true],
       ["No stale CLI drift hooks", true],
-      ["Copilot CLI MCP goal server", true],
+      ["No legacy CLI goalSystem server", true],
       ["Instruction snippet", true],
       ["VS Code Chat custom agent", true],
       ["VS Code Chat hook config", true],
-      ["VS Code MCP config", true],
+      ["No legacy VS Code goalSystem server", true],
     ],
   };
 

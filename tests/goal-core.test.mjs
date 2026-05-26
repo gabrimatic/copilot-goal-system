@@ -68,7 +68,7 @@ test("stop continuation directive forces real continuation without issue-string 
   assert.match(directive, /hard continuation directive/);
   assert.match(directive, /Call goal_system_status/);
   assert.match(directive, /Call goal_system_update/);
-  assert.match(directive, /Call goal_system_close only when/);
+  assert.match(directive, /Call goal_system_close, or local goalctl close, only when/);
   assert.match(directive, /do not bypass the guard by copying unresolved issue text/);
 });
 
@@ -474,11 +474,9 @@ test("compact snapshots summarize large queues without mutating authoritative st
 
 test("strict drift enforcement blocks non-goal tools only when recovery is available", () => {
   assert.equal(isGoalSystemToolName("goal_system_update"), true);
-  assert.equal(isGoalSystemToolName("mcp_goalSystem_goal_system_update"), true);
-  assert.equal(isGoalSystemToolName("goalSystem-goal_system_status"), true);
-  assert.equal(isGoalSystemToolName("goalSystem-goal_system_update"), true);
-  assert.equal(isGoalSystemToolName("goalSystem-goal_system_close"), true);
-  assert.equal(isGoalSystemToolName("goalSystem(goal_system_update)"), true);
+  assert.equal(isGoalSystemToolName("vscode.goal_system_status"), true);
+  assert.equal(isGoalSystemToolName("tool-goal_system_update"), true);
+  assert.equal(isGoalSystemToolName("goal_system_close"), true);
   assert.equal(isGoalSystemToolName("bash"), false);
 
   assert.equal(
@@ -498,7 +496,7 @@ test("strict drift enforcement blocks non-goal tools only when recovery is avail
     false
   );
   assert.equal(
-    shouldEnforceDrift({ hasActiveGoal: true, toolName: "goalSystem-goal_system_update", driftCount: 99, threshold: 5, isSubagent: false }),
+    shouldEnforceDrift({ hasActiveGoal: true, toolName: "tool-goal_system_update", driftCount: 99, threshold: 5, isSubagent: false }),
     false
   );
   assert.equal(

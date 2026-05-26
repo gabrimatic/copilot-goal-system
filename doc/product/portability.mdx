@@ -44,13 +44,14 @@ Preview strict mode is supported by this project.
 VS Code provides the surfaces this implementation uses:
 
 - custom agents
-- MCP servers
+- extension-contributed language model tools
+- local `goalctl` command fallback
 - `SessionStart` and `UserPromptSubmit` hooks
 - `PreToolUse` and `PostToolUse` hooks
 - `PreCompact` hook
 - `Stop` hook
 - `SubagentStart` and `SubagentStop` hooks
-- profile-level hook and MCP configuration
+- profile-level hook configuration
 
 The adapter is preview because VS Code hooks and agent plugins are Preview surfaces and can be disabled by organization policy.
 
@@ -66,4 +67,4 @@ Model runtimes are not agent shells with standardized lifecycle hooks. A specifi
 
 Adapter needed.
 
-If the agent supports MCP tools, hooks, and stable subagent metadata, the state machine can be reused. If it only supports prompts, the system becomes guidance rather than enforcement.
+If the agent supports direct tools, hooks, and stable subagent metadata, the state machine can be reused. If it only supports prompts, the system becomes guidance rather than enforcement.

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.17
+
+- Removes the goal-system MCP server and direct MCP SDK dependency from runtime, packaging, install, doctor, and status paths.
+- Adds `bin/goalctl.mjs` as the local no-MCP command fallback for status, open, update, and close operations.
+- Installs VS Code language model tools directly through the extension and keeps VS Code Chat on hooks plus the local command fallback.
+- Cleans up legacy `goalSystem` server entries from old Copilot CLI and VS Code profiles without adding new MCP config.
+
 ## 1.1.16
 
 - Recovers malformed or non-object Copilot and VS Code MCP target config files during install/update by preserving the original as an `*.invalid-backup-*` file, recreating a clean JSON object, and continuing setup.

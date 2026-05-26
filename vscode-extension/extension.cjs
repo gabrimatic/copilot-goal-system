@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 const vscode = require("vscode");
 const EXTENSION_PACKAGE = require("./package.json");
 const {
@@ -13,9 +14,10 @@ const {
 } = require("./lib/runtime-version.cjs");
 const { copilotRootForHome } = require("./lib/copilot-paths.cjs");
 const {
-  cliMcpServerInstalled,
   countDuplicateGoalHooks,
   findStaleDriftHookEvents,
+  hasLegacyCliGoalServer,
+  hasLegacyVscodeGoalServer,
   hookInstalled,
 } = require("./lib/install-status.cjs");
 const { parseJsoncText } = require("./lib/jsonc-file.cjs");
@@ -43,7 +45,7 @@ const VSCODE_HOOK_EVENTS = [
   "SubagentStop",
   "Stop",
 ];
-const RUNTIME_CHECK_LABELS = ["Extension package", "Local runtime version", "Production dependencies", "Local MCP server file"];
+const RUNTIME_CHECK_LABELS = ["Extension package", "Local runtime version", "Production dependencies", "Local goalctl command"];
 const CLI_CHECK_LABELS = [
   "Goal skill",
   "CLI hook helper",
@@ -52,10 +54,10 @@ const CLI_CHECK_LABELS = [
   "All CLI hook entries",
   "No duplicate CLI goal hooks",
   "No stale CLI drift hooks",
-  "Copilot CLI MCP goal server",
+  "No legacy CLI goalSystem server",
   "Instruction snippet",
 ];
-const VSCODE_CHAT_CHECK_LABELS = ["VS Code Chat custom agent", "VS Code Chat hook config", "VS Code MCP config"];
+const VSCODE_CHAT_CHECK_LABELS = ["VS Code Chat custom agent", "VS Code Chat hook config", "No legacy VS Code goalSystem server"];
 
 let installInProgress = false;
 
@@ -65,6 +67,7 @@ function activate(context) {
   statusBar.name = DISPLAY_NAME;
   context.subscriptions.push(output);
   context.subscriptions.push(statusBar);
+  registerGoalTools(context, output);
 
   context.subscriptions.push(
     vscode.commands.registerCommand("copilotGoalSystem.install", () => installGoalSystem(context, output, statusBar, "all")),
@@ -111,18 +114,17 @@ function configuredHome() {
 function installedPaths() {
   const home = configuredHome();
   const copilotRoot = copilotRootForHome(home);
-  const vscodeMcpConfigFile = configuredVscodeMcpConfigPath(home);
   return {
     home,
     copilotRoot,
     extensionDir: path.join(copilotRoot, "extensions", "goal-system"),
+    goalctlFile: path.join(copilotRoot, "extensions", "goal-system", "bin", "goalctl.mjs"),
     skillFile: path.join(copilotRoot, "skills", "goal", "SKILL.md"),
     hookFile: path.join(copilotRoot, "hooks", "goal-context.sh"),
     vscodeHookConfigFile: path.join(copilotRoot, "hooks", "goal-system-vscode.json"),
     vscodeAgentFile: path.join(copilotRoot, "agents", "goal-system.agent.md"),
-    cliMcpConfigFile: path.join(copilotRoot, "mcp-config.json"),
-    vscodeMcpConfigFile,
-    mcpServerFile: path.join(copilotRoot, "extensions", "goal-system", "adapters", "vscode-chat", "mcp-server.mjs"),
+    legacyCliMcpConfigFile: path.join(copilotRoot, "mcp-config.json"),
+    legacyVscodeMcpConfigFile: legacyVscodeMcpConfigPath(home),
     settingsFile: path.join(copilotRoot, "settings.json"),
     instructionsFile: path.join(copilotRoot, "copilot-instructions.md"),
     sdkPackage: path.join(copilotRoot, "extensions", "goal-system", "node_modules", "@github", "copilot-sdk", "package.json"),
@@ -130,14 +132,7 @@ function installedPaths() {
   };
 }
 
-function configuredVscodeMcpConfigPath(home) {
-  const override = String(config().get("vscodeMcpConfigPathOverride", "") || "").trim();
-  if (override) {
-    if (override === "~") return home;
-    if (override.startsWith("~/")) return path.join(home, override.slice(2));
-    return path.resolve(override);
-  }
-
+function legacyVscodeMcpConfigPath(home) {
   if (process.platform === "win32") {
     return path.join(process.env.APPDATA || path.join(home, "AppData", "Roaming"), "Code", "User", "mcp.json");
   }
@@ -156,6 +151,157 @@ function bundleRoot(context) {
 
 function installerPath(context) {
   return path.join(bundleRoot(context), "scripts", "install.mjs");
+}
+
+async function loadGoalCore(context) {
+  const bundleCorePath = path.join(bundleRoot(context), "lib", "goal-core.mjs");
+  return import(pathToFileURL(bundleCorePath).href);
+}
+
+function toolTextResult(text) {
+  return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(text)]);
+}
+
+function toolContext(input) {
+  const sessionId = String(input.sessionId || "").trim();
+  const cwd = String(input.cwd || "").trim();
+  if (!sessionId) throw new Error("sessionId is required. Use the Session ID from the Goal System hook context.");
+  if (!cwd) throw new Error("cwd is required. Use the CWD from the Goal System hook context.");
+  return { sessionId, cwd };
+}
+
+function patchFromToolInput(input) {
+  const patch = { ...input };
+  delete patch.sessionId;
+  delete patch.cwd;
+  return patch;
+}
+
+class GoalSystemLanguageTool {
+  constructor(context, kind) {
+    this.context = context;
+    this.kind = kind;
+  }
+
+  async prepareInvocation(options) {
+    const action = {
+      status: "Read persisted goal state",
+      open: "Open persisted goal",
+      update: "Update persisted goal",
+      close: "Close persisted goal",
+    }[this.kind];
+    const sessionId = String(options.input?.sessionId || "missing");
+    return {
+      invocationMessage: action,
+      confirmationMessages: {
+        title: action,
+        message: new vscode.MarkdownString(`Run ${action.toLowerCase()} for session \`${sessionId}\`.`),
+      },
+    };
+  }
+
+  async invoke(options) {
+    const input = options.input || {};
+    const core = await loadGoalCore(this.context);
+    const paths = installedPaths();
+    const store = new core.GoalStore({
+      stateRoot: path.join(paths.copilotRoot, "session-state", "goal-system"),
+      workspaceStateRoot: path.join(paths.copilotRoot, "session-state"),
+    });
+    await store.init();
+
+    const { sessionId, cwd } = toolContext(input);
+    const record = await store.loadGoalRecord(sessionId, cwd);
+
+    if (this.kind === "status") {
+      if (!record || !core.isOpenGoal(record.goal)) {
+        return toolTextResult("No persisted active goal is stored for this VS Code session/workspace.");
+      }
+      return toolTextResult(core.formatGoalSummary(record.goal, { includeHistory: true }));
+    }
+
+    if (this.kind === "open") {
+      if (record && core.isOpenGoal(record.goal) && input.replaceExisting !== true) {
+        throw new Error(
+          "An active persisted goal already exists for this VS Code session/workspace. Use goal_system_update, or pass replaceExisting only when the prompt clearly replaces the current goal."
+        );
+      }
+      const patch = patchFromToolInput(input);
+      const goal = core.createGoalRecord(patch, sessionId, cwd, {
+        sourcePrompt: patch.sourcePrompt,
+        historyNote: patch.historyNote || "VS Code goal opened or replaced",
+      });
+      const persisted = await store.persistGoalRecord(sessionId, cwd, goal);
+      store.auditLog("vscode_tool_open", { sid: sessionId, id: persisted.id, replaced: Boolean(record && core.isOpenGoal(record.goal)) });
+      return toolTextResult(core.formatGoalSummary(persisted));
+    }
+
+    if (!record || !record.goal) {
+      throw new Error("No persisted goal exists yet. Use goal_system_open first with the current sessionId and cwd.");
+    }
+    if (!core.isOpenGoal(record.goal)) {
+      throw new Error("The persisted goal is already closed. Open a new goal only when the prompt explicitly asks for one.");
+    }
+
+    if (this.kind === "update") {
+      if (typeof input.completionStatus === "string" && !core.MUTABLE_GOAL_STATUSES.includes(input.completionStatus)) {
+        throw new Error("goal_system_update cannot mark a goal complete or cancelled. Use goal_system_close after verification.");
+      }
+      const patch = patchFromToolInput(input);
+      const changedFields = Object.keys(patch).filter((key) => !["historyNote", "sourcePrompt"].includes(key) && patch[key] !== undefined);
+      if (!changedFields.length) {
+        throw new Error("goal_system_update requires at least one real state field such as inspectionEvidence, verificationResults, doneSoFar, remaining, or blockers.");
+      }
+      const nextGoal = core.mergeGoal(record.goal, patch, "update", patch.historyNote || "VS Code goal state updated");
+      const persisted = await store.persistGoalRecord(sessionId, cwd, nextGoal);
+      store.auditLog("vscode_tool_update", { sid: sessionId, id: persisted.id, fields: changedFields });
+      return toolTextResult(core.formatGoalSummary(persisted));
+    }
+
+    if (this.kind === "close") {
+      const patch = patchFromToolInput(input);
+      if (!["complete", "blocked", "cancelled"].includes(patch.completionStatus)) {
+        throw new Error("goal_system_close requires completionStatus complete, blocked, or cancelled.");
+      }
+      const nextGoal = core.mergeGoal(
+        record.goal,
+        {
+          ...patch,
+          blockers: patch.completionStatus === "complete" && !Array.isArray(patch.blockers) ? [] : patch.blockers,
+          remaining: patch.completionStatus === "complete" && !Array.isArray(patch.remaining) ? [] : patch.remaining,
+        },
+        "close",
+        patch.summary || `VS Code goal marked ${patch.completionStatus}`
+      );
+      nextGoal.closedAt = new Date().toISOString();
+      if (patch.completionStatus === "complete") {
+        const failures = core.validateGoalCompletion(nextGoal);
+        if (failures.length) {
+          throw new Error(`Refusing to mark the goal complete. Missing or conflicting completion evidence:\n- ${failures.join("\n- ")}`);
+        }
+      }
+      const persisted = await store.persistGoalRecord(sessionId, cwd, nextGoal);
+      store.auditLog("vscode_tool_close", { sid: sessionId, id: persisted.id, status: patch.completionStatus });
+      return toolTextResult(core.formatGoalSummary(persisted, { includeHistory: false }));
+    }
+
+    throw new Error(`Unsupported goal tool kind: ${this.kind}`);
+  }
+}
+
+function registerGoalTools(context, output) {
+  if (!vscode.lm || typeof vscode.lm.registerTool !== "function") {
+    output.appendLine("VS Code language model tool API is unavailable; Goal System will use hooks and local goalctl fallback only.");
+    return;
+  }
+  for (const [name, kind] of [
+    ["goal_system_status", "status"],
+    ["goal_system_open", "open"],
+    ["goal_system_update", "update"],
+    ["goal_system_close", "close"],
+  ]) {
+    context.subscriptions.push(vscode.lm.registerTool(name, new GoalSystemLanguageTool(context, kind)));
+  }
 }
 
 async function exists(filePath) {
@@ -185,21 +331,6 @@ function vscodeHookConfigInstalled(config) {
   });
 }
 
-function resolveMaybePath(value, home) {
-  const text = String(value || "");
-  const expanded = text === "~" ? home : text.startsWith("~/") ? path.join(home, text.slice(2)) : text;
-  return path.isAbsolute(expanded) ? path.normalize(expanded) : path.resolve(expanded);
-}
-
-function mcpServerInstalled(config, expectedScriptPath = "", home = os.homedir()) {
-  const server = config && config.servers && config.servers.goalSystem;
-  if (!server || server.type !== "stdio" || !Array.isArray(server.args)) return false;
-  const scriptArg = server.args.find((arg) => /mcp-server\.mjs$/.test(String(arg)));
-  if (!scriptArg) return false;
-  if (!expectedScriptPath) return true;
-  return resolveMaybePath(scriptArg, home) === resolveMaybePath(expectedScriptPath, home);
-}
-
 function statusIsInstalled(status) {
   return status.checks.every(([, ok]) => ok);
 }
@@ -225,7 +356,7 @@ function surfaceSummary(status) {
   const runtimeReady = allChecksOk(status, RUNTIME_CHECK_LABELS);
   const cliReady = runtimeReady && allChecksOk(status, CLI_CHECK_LABELS);
   const vscodeReady = runtimeReady && allChecksOk(status, VSCODE_CHAT_CHECK_LABELS);
-  const cliEvidence = anyCheckOk(status, ["Goal skill", "CLI hook helper", "All CLI hook entries", "Copilot CLI MCP goal server", "Instruction snippet"]);
+  const cliEvidence = anyCheckOk(status, ["Goal skill", "CLI hook helper", "All CLI hook entries", "Local goalctl command", "Instruction snippet"]);
   const vscodeEvidence = anyCheckOk(status, VSCODE_CHAT_CHECK_LABELS);
   return {
     runtime: runtimeReady ? "Current" : status.runtimeState.status === "stale" ? "Update needed" : status.runtimeState.installed ? "Needs attention" : "Missing",
@@ -246,10 +377,10 @@ async function collectStatus() {
   let settingsError = "";
   let vscodeHookConfig = null;
   let vscodeHookConfigError = "";
-  let mcpConfig = null;
-  let mcpConfigError = "";
-  let cliMcpConfig = null;
-  let cliMcpConfigError = "";
+  let legacyVscodeConfig = null;
+  let legacyVscodeConfigError = "";
+  let legacyCliConfig = null;
+  let legacyCliConfigError = "";
 
   if (installedPackagePresent) {
     try {
@@ -281,19 +412,19 @@ async function collectStatus() {
     }
   }
 
-  if (await exists(paths.vscodeMcpConfigFile)) {
+  if (await exists(paths.legacyVscodeMcpConfigFile)) {
     try {
-      mcpConfig = await readJson(paths.vscodeMcpConfigFile);
+      legacyVscodeConfig = await readJson(paths.legacyVscodeMcpConfigFile);
     } catch (error) {
-      mcpConfigError = error && error.message ? error.message : "VS Code MCP config could not be parsed";
+      legacyVscodeConfigError = error && error.message ? error.message : "VS Code server config could not be parsed";
     }
   }
 
-  if (await exists(paths.cliMcpConfigFile)) {
+  if (await exists(paths.legacyCliMcpConfigFile)) {
     try {
-      cliMcpConfig = await readJson(paths.cliMcpConfigFile);
+      legacyCliConfig = await readJson(paths.legacyCliMcpConfigFile);
     } catch (error) {
-      cliMcpConfigError = error && error.message ? error.message : "Copilot CLI MCP config could not be parsed";
+      legacyCliConfigError = error && error.message ? error.message : "Copilot CLI server config could not be parsed";
     }
   }
 
@@ -301,8 +432,8 @@ async function collectStatus() {
   const duplicateCliGoalHooks = settings ? countDuplicateGoalHooks(settings, CLI_HOOK_EVENTS) : {};
   const staleCliDriftHookEvents = settings ? findStaleDriftHookEvents(settings) : [];
   const cliHooksDisabled = Boolean(settings && settings.disableAllHooks);
-  const cliMcpConfigured = cliMcpServerInstalled(cliMcpConfig, { home: paths.home, expectedScriptPath: paths.mcpServerFile });
-  const vscodeMcpConfigured = mcpServerInstalled(mcpConfig, paths.mcpServerFile, paths.home);
+  const legacyCliGoalServerPresent = legacyCliConfig ? hasLegacyCliGoalServer(legacyCliConfig) : false;
+  const legacyVscodeGoalServerPresent = legacyVscodeConfig ? hasLegacyVscodeGoalServer(legacyVscodeConfig) : false;
 
   return {
     paths,
@@ -313,6 +444,7 @@ async function collectStatus() {
       ["Extension package", installedPackagePresent && !installedPackageError],
       ["Local runtime version", !runtimeState.needsUpdate && !installedPackageError],
       ["Production dependencies", await exists(paths.sdkPackage)],
+      ["Local goalctl command", await exists(paths.goalctlFile)],
       ["Goal skill", await exists(paths.skillFile)],
       ["CLI hook helper", await exists(paths.hookFile)],
       ["CLI settings JSON", Boolean(settings) && !settingsError],
@@ -320,25 +452,24 @@ async function collectStatus() {
       ["All CLI hook entries", cliHookEventsPresent.length === CLI_HOOK_EVENTS.length],
       ["No duplicate CLI goal hooks", Object.keys(duplicateCliGoalHooks).length === 0],
       ["No stale CLI drift hooks", staleCliDriftHookEvents.length === 0],
-      ["Copilot CLI MCP goal server", cliMcpConfigured],
+      ["No legacy CLI goalSystem server", !legacyCliGoalServerPresent],
       ["Instruction snippet", await instructionsSnippetInstalled(paths.instructionsFile)],
       ["VS Code Chat custom agent", await exists(paths.vscodeAgentFile)],
       ["VS Code Chat hook config", vscodeHookConfigInstalled(vscodeHookConfig)],
-      ["Local MCP server file", await exists(paths.mcpServerFile)],
-      ["VS Code MCP config", vscodeMcpConfigured],
+      ["No legacy VS Code goalSystem server", !legacyVscodeGoalServerPresent],
     ],
     cliHookEventsPresent,
     duplicateCliGoalHooks,
     staleCliDriftHookEvents,
     cliHooksDisabled,
-    cliMcpServerConfigured: cliMcpConfigured,
+    legacyCliGoalServerPresent,
     vscodeHookConfigInstalled: vscodeHookConfigInstalled(vscodeHookConfig),
-    mcpServerConfigured: vscodeMcpConfigured,
+    legacyVscodeGoalServerPresent,
     installedPackageError,
     settingsError,
     vscodeHookConfigError,
-    mcpConfigError,
-    cliMcpConfigError,
+    legacyVscodeConfigError,
+    legacyCliConfigError,
   };
 }
 
@@ -368,15 +499,16 @@ function formatStatusReport(status) {
     `VS Code Chat: ${summary.vscodeChat}`,
     `Runtime: ${summary.runtime}`,
     `Result: ${result}`,
+    `Goalctl: ${checkOk(status, "Local goalctl command") ? "Installed" : "Needs attention"}`,
     "",
     "Checks:",
     ...status.checks.map(([label, ok]) => `[${ok ? "OK" : "Issue"}] ${label}`),
     "",
     `CLI hook entries: ${status.cliHookEventsPresent.length}/${CLI_HOOK_EVENTS.length}`,
     `CLI hooks disabled: ${status.cliHooksDisabled ? "Yes" : "No"}`,
-    `Copilot CLI MCP goal server: ${status.cliMcpServerConfigured ? "Configured" : "Needs attention"}`,
     `VS Code hook config: ${status.vscodeHookConfigInstalled ? "Installed" : "Needs attention"}`,
-    `VS Code MCP server: ${status.mcpServerConfigured ? "Configured" : "Needs attention"}`,
+    `Legacy CLI goalSystem server: ${status.legacyCliGoalServerPresent ? "Present" : "Absent"}`,
+    `Legacy VS Code goalSystem server: ${status.legacyVscodeGoalServerPresent ? "Present" : "Absent"}`,
   ];
 
   const duplicateEvents = Object.entries(status.duplicateCliGoalHooks || {});
@@ -397,11 +529,11 @@ function formatStatusReport(status) {
   if (status.vscodeHookConfigError) {
     lines.push("", `VS Code hook config error: ${status.vscodeHookConfigError}`);
   }
-  if (status.cliMcpConfigError) {
-    lines.push("", `Copilot CLI MCP config error: ${status.cliMcpConfigError}`);
+  if (status.legacyCliConfigError) {
+    lines.push("", `Legacy CLI server config note: ${status.legacyCliConfigError}`);
   }
-  if (status.mcpConfigError) {
-    lines.push("", `VS Code MCP config error: ${status.mcpConfigError}`);
+  if (status.legacyVscodeConfigError) {
+    lines.push("", `Legacy VS Code server config note: ${status.legacyVscodeConfigError}`);
   }
 
   if (!installed && missing.length > 0) {
@@ -410,15 +542,15 @@ function formatStatusReport(status) {
 
   lines.push("", "Next steps:");
   if (installed) {
-    lines.push("- Restart Copilot CLI after updates.", "- Run /skills reload", "- Run /mcp show", "- Run /env", "- In VS Code, run MCP: Reset Cached Tools or reload the window.");
+    lines.push("- Restart Copilot CLI after updates.", "- Run /skills reload", "- Run /env", "- Reload VS Code if you use VS Code Chat.");
   } else if (status.runtimeState.status === "stale") {
-    lines.push("- Run Copilot Goal System: Install Recommended Setup to update local files.", "- Restart Copilot CLI.", "- Reload VS Code or run MCP: Reset Cached Tools.");
+    lines.push("- Run Copilot Goal System: Install Recommended Setup to update local files.", "- Restart Copilot CLI.", "- Reload VS Code.");
   } else if (summary.cli === "Ready" && summary.vscodeChat !== "Ready") {
-    lines.push("- CLI mode is ready.", "- Run Copilot Goal System: Install VS Code Chat Only if you want the VS Code adapter too.", "- Restart Copilot CLI, then run /skills reload, /mcp show, and /env.");
+    lines.push("- CLI mode is ready.", "- Run Copilot Goal System: Install VS Code Chat Only if you want the VS Code adapter too.", "- Restart Copilot CLI, then run /skills reload and /env.");
   } else if (summary.vscodeChat === "Ready" && summary.cli !== "Ready") {
-    lines.push("- VS Code Chat mode is ready.", "- Run Copilot Goal System: Install CLI Only if you want terminal support too.", "- Reload VS Code or run MCP: Reset Cached Tools.");
+    lines.push("- VS Code Chat mode is ready.", "- Run Copilot Goal System: Install CLI Only if you want terminal support too.", "- Reload VS Code.");
   } else {
-    lines.push("- Run Copilot Goal System: Install Recommended Setup.", "- Restart Copilot CLI.", "- Reload VS Code or run MCP: Reset Cached Tools.");
+    lines.push("- Run Copilot Goal System: Install Recommended Setup.", "- Restart Copilot CLI.", "- Reload VS Code.");
   }
 
   return lines.join("\n");
@@ -662,7 +794,7 @@ async function installGoalSystem(context, output, statusBar, target) {
         progress.report({ message: "Checking Node.js" });
         await assertNode20(output, env);
         progress.report({ message: "Copying files and installing dependencies" });
-        await runStreaming("node", [script, "--target", target, "--vscode-mcp-config", paths.vscodeMcpConfigFile], { cwd: bundleRoot(context), env }, output);
+        await runStreaming("node", [script, "--target", target], { cwd: bundleRoot(context), env }, output);
       }
     );
 

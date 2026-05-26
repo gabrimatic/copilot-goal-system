@@ -11,7 +11,7 @@ Use this checklist after installing into your real `~/.copilot` profile.
 
 - `/env` shows the goal-system extension or plugin surface.
 - `/skills info goal` shows the goal skill.
-- `/mcp show` shows `goalSystem`, and `copilot mcp get goalSystem --json` works from the shell.
+- `node ~/.copilot/extensions/goal-system/bin/goalctl.mjs --self-test` prints `copilot-goal-system goalctl ready`.
 - Starting `/goal <real task>` creates a persisted goal instead of only acknowledging the skill.
 - `goal_system_status` shows the same goal ID after a new prompt in the same session.
 - A subagent receives main-session-only boundary text and cannot use goal tools.
@@ -22,9 +22,8 @@ Use this checklist after installing into your real `~/.copilot` profile.
 
 ### VS Code Copilot Chat
 
-- `MCP: List Servers` shows `goalSystem`.
-- `MCP: Reset Cached Tools` refreshes the `goal_system_*` tools after install or update.
 - The `Goal System` custom agent appears in Copilot Chat.
+- Direct VS Code tools `goal_system_status`, `goal_system_open`, `goal_system_update`, and `goal_system_close` are available to the agent.
 - The `GitHub Copilot Chat Hooks` output channel shows goal hooks running.
 - Starting `/goal <real task>` through the `Goal System` custom agent creates a persisted goal with the injected `sessionId` and `cwd`.
 - Asking to continue a single same-directory active goal in a fresh VS Code Chat session loads that persisted goal instead of starting from memory.
@@ -43,4 +42,4 @@ The fixture project has a real failing test. The live session should inspect it,
 
 ## Known limits
 
-Local tests cannot prove a specific Copilot CLI or VS Code build invokes every documented hook. Verify `/env`, MCP server registration, hook output, and one real `/goal` session after installing.
+Local tests cannot prove a specific Copilot CLI or VS Code build invokes every documented hook. Verify `/env`, direct goal tools or `goalctl`, hook output, and one real `/goal` session after installing.

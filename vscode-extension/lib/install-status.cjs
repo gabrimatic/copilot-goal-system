@@ -71,66 +71,19 @@ function findStaleDriftHookEvents(settings) {
   return events;
 }
 
-function expandHomePath(value, home = os.homedir()) {
-  const text = String(value || "");
-  if (text === "~") return home;
-  if (text.startsWith("~/")) return path.join(home, text.slice(2));
-  return text;
+function hasLegacyCliGoalServer(config) {
+  return Boolean(config && config.mcpServers && config.mcpServers.goalSystem);
 }
 
-function resolveMaybePath(value, home = os.homedir()) {
-  const expanded = expandHomePath(value, home);
-  return path.isAbsolute(expanded) ? path.normalize(expanded) : path.resolve(expanded);
-}
-
-function cliMcpServerDetails(config, options = {}) {
-  const expectedScriptPath = options.expectedScriptPath ? resolveMaybePath(options.expectedScriptPath, options.home) : "";
-  const server = config && config.mcpServers && config.mcpServers.goalSystem;
-  if (!server || !Array.isArray(server.args)) {
-    return { ok: false, reason: "goalSystem server is missing or has no args" };
-  }
-  const command = String(server.command || "");
-  const type = String(server.type || "");
-  if (!command) return { ok: false, reason: "goalSystem command is missing" };
-  if (type !== "local" && type !== "stdio") return { ok: false, reason: `goalSystem type is ${type || "missing"}` };
-
-  const scriptArg = server.args.find((arg) => /mcp-server\.mjs$/.test(String(arg)));
-  if (!scriptArg) return { ok: false, reason: "goalSystem args do not point at mcp-server.mjs" };
-
-  const resolvedScriptPath = resolveMaybePath(scriptArg, options.home);
-  if (expectedScriptPath && resolvedScriptPath !== expectedScriptPath) {
-    return {
-      ok: false,
-      reason: `goalSystem points at ${resolvedScriptPath}, expected ${expectedScriptPath}`,
-      command,
-      args: server.args,
-      env: server.env && typeof server.env === "object" ? server.env : {},
-      scriptPath: resolvedScriptPath,
-    };
-  }
-
-  const toolsOk = !Array.isArray(server.tools) || server.tools.includes("*") || server.tools.some((tool) => /^goal_system_/.test(String(tool)));
-  if (!toolsOk) return { ok: false, reason: "goalSystem tools filter does not expose goal_system_* tools" };
-
-  return {
-    ok: true,
-    reason: "configured",
-    command,
-    args: server.args,
-    env: server.env && typeof server.env === "object" ? server.env : {},
-    scriptPath: resolvedScriptPath,
-  };
-}
-
-function cliMcpServerInstalled(config, options = {}) {
-  return cliMcpServerDetails(config, options).ok;
+function hasLegacyVscodeGoalServer(config) {
+  return Boolean(config && config.servers && config.servers.goalSystem);
 }
 
 module.exports = {
-  cliMcpServerDetails,
-  cliMcpServerInstalled,
   countDuplicateGoalHooks,
   findStaleDriftHookEvents,
+  hasLegacyCliGoalServer,
+  hasLegacyVscodeGoalServer,
   hookCommandText,
   hookInstalled,
   isDirectGoalContextHook,

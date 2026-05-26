@@ -105,7 +105,7 @@ function emptySessionContextNote(sessionId, cwd) {
     "Goal System for VS Code Chat is available for this main session.",
     `sessionId: ${sessionId}`,
     `cwd: ${cwd}`,
-    "When the prompt explicitly starts goal mode, call goal_system_open with these exact values. For active goals, use goal_system_status before continuing or closing. Subagents must not use goal tools.",
+    "When the prompt explicitly starts goal mode, call goal_system_open with these exact values. If direct goal tools are unavailable, use local goalctl with the same sessionId and cwd. For active goals, use goal_system_status or goalctl status before continuing or closing. Subagents must not use goal tools.",
   ].join("\n");
 }
 

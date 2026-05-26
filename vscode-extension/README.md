@@ -9,7 +9,7 @@ Use it when long-running Copilot work needs to keep one active goal alive across
 1. Install this extension from the VS Code Marketplace.
 2. Run `Copilot Goal System: Install Recommended Setup` from the Command Palette.
 3. Restart Copilot CLI if you use CLI mode.
-4. Reload VS Code or run `MCP: Reset Cached Tools` if you use VS Code Chat mode.
+4. Reload VS Code if you use VS Code Chat mode.
 
 The Marketplace **Install** button installs the VS Code extension. The command installs the goal system into your local Copilot profile:
 
@@ -19,11 +19,11 @@ The Marketplace **Install** button installs the VS Code extension. The command i
 - `~/.copilot/hooks/goal-system-vscode.json`
 - `~/.copilot/agents/goal-system.agent.md`
 - hook entries in `~/.copilot/settings.json`
-- a `goalSystem` MCP fallback server in `~/.copilot/mcp-config.json`
-- a `goalSystem` MCP server in the VS Code profile `mcp.json`
+- `~/.copilot/extensions/goal-system/bin/goalctl.mjs`
 - a short reminder in `~/.copilot/copilot-instructions.md`
 
-The installer preserves existing Copilot and VS Code MCP settings and writes backups before changing files. It accepts JSONC in Copilot CLI `settings.json`, Copilot CLI `mcp-config.json`, and VS Code profile `mcp.json`, including comments and trailing commas. If one of those target config files is malformed or is not a JSON object, the installer preserves the original as an `*.invalid-backup-*` file, recreates a clean JSON object, and then applies the goal-system entries. Config backups keep the original file permissions, and newly created config files default to owner-only permissions. Runtime updates prepare dependencies before swapping the installed local runtime, so failed dependency installs leave the previous runtime in place. On first startup, VS Code offers a one-time setup prompt and a compact status bar item.
+The installer preserves existing Copilot settings and writes backups before changing files. It accepts JSONC in Copilot CLI `settings.json`, including comments and trailing commas. If that settings file is malformed or is not a JSON object, the installer preserves the original as an `*.invalid-backup-*` file, recreates a clean JSON object, and then applies the goal-system entries. Config backups keep the original file permissions, and newly created config files default to owner-only permissions. Runtime updates prepare dependencies before swapping the installed local runtime, so failed dependency installs leave the previous runtime in place. On first startup, VS Code offers a one-time setup prompt and a compact status bar item.
+Older `goalSystem` server entries from previous releases are removed when their local config files are parseable. Current installs do not create or rely on any MCP server.
 
 After extension updates, VS Code compares the extension bundle with the installed files in `~/.copilot/extensions/goal-system/`. If the local runtime is stale, the status bar changes to `Goal Update` and VS Code prompts you to update the local Copilot files. Updates replace the installed runtime snapshot so stale files from older releases do not remain active.
 
@@ -34,7 +34,7 @@ After extension updates, VS Code compares the extension bundle with the installe
 | Goal state | Persists one active goal for the main Copilot session, restores compact context after resume or compaction, and loads one unambiguous same-directory goal on explicit continuation. |
 | Session boundaries | Keeps parallel same-directory sessions isolated and keeps subagents outside goal ownership. |
 | Completion gates | Tracks newly discovered and renamed issues, warns on stale goal state, keeps drift recoverable, and refuses completion without inspection evidence, verification results, requirement coverage, no remaining work, no blockers, and a completion audit. |
-| VS Code setup | Installs and updates from VS Code, adds the `Goal System` custom agent, configures hooks and MCP tools, and shows setup or update state in the status bar. |
+| VS Code setup | Installs and updates from VS Code, adds the `Goal System` custom agent, configures hooks and direct goal tools, and shows setup or update state in the status bar. |
 
 ## Commands
 
@@ -43,7 +43,7 @@ Open the Command Palette and run:
 - `Copilot Goal System: Install Recommended Setup` installs the CLI and VS Code Chat adapters.
 - `Copilot Goal System: Install into Copilot CLI` installs only the CLI adapter.
 - `Copilot Goal System: Install into VS Code Copilot Chat` installs only the VS Code Chat adapter.
-- `Copilot Goal System: Show Status` checks the package, dependencies, CLI hooks, VS Code hooks, custom agent, MCP server, and instruction snippet.
+- `Copilot Goal System: Show Status` checks the package, dependencies, CLI hooks, VS Code hooks, custom agent, goalctl, legacy cleanup, and instruction snippet.
 - `Copilot Goal System: Open Setup Walkthrough` opens the guided VS Code setup steps.
 - `Copilot Goal System: Copy Test Prompt` copies a fixture prompt for testing the full goal loop.
 - `Copilot Goal System: Open Documentation` opens the source documentation.
@@ -54,13 +54,10 @@ For CLI mode, restart Copilot CLI and run:
 
 ```text
 /skills reload
-/mcp show
 /env
 ```
 
-From the shell, `copilot mcp get goalSystem --json` should also show the configured server.
-
-For VS Code Chat, reload VS Code or run `MCP: Reset Cached Tools`, then select the `Goal System` custom agent.
+For VS Code Chat, reload VS Code, then select the `Goal System` custom agent.
 
 Start a goal:
 
@@ -71,13 +68,15 @@ Make this project pass its test suite. Inspect first, fix every in-scope issue, 
 
 ## Requirements
 
-- VS Code 1.85 or newer
+- VS Code 1.95 or newer
 - Node.js 20 or newer on `PATH`
 - GitHub Copilot CLI for CLI mode
-- VS Code Copilot Chat with hooks and MCP enabled for VS Code Chat mode
+- VS Code Copilot Chat with hooks and extension language model tools enabled for VS Code Chat mode
 - A bash-compatible shell and `jq` for the CLI hook helper
 
-The installer uses your current OS account's home directory by default. Set `copilotGoalSystem.homeOverride` when you need to install into a different local profile. Set `copilotGoalSystem.vscodeMcpConfigPathOverride` only when your VS Code MCP config lives outside the detected profile path.
+VS Code asks for confirmation before extension-contributed language model tools run. Choose Always Allow for the Goal System tools if you want Copilot Chat to update goal state without repeated prompts. If the tools are unavailable or blocked by policy, use the local `goalctl` command with the `sessionId` and `cwd` from hook context.
+
+The installer uses your current OS account's home directory by default. Set `copilotGoalSystem.homeOverride` when you need to install into a different local profile.
 
 ## Settings
 
@@ -88,7 +87,6 @@ The installer uses your current OS account's home directory by default. Set `cop
 | `copilotGoalSystem.promptOnFirstRun` | `true` | Show the one-time setup prompt when setup is missing. |
 | `copilotGoalSystem.promptOnUpdate` | `true` | Prompt when extension updates leave local Copilot runtime files stale. |
 | `copilotGoalSystem.showStatusBar` | `true` | Show the compact setup/status item in the VS Code status bar. |
-| `copilotGoalSystem.vscodeMcpConfigPathOverride` | empty | Use a custom VS Code MCP config path. |
 
 ## Behavior
 

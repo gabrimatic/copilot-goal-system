@@ -5,6 +5,7 @@ const path = require("node:path");
 const runtimeEntries = [
   ".github/hooks/goal-system.json",
   "adapters",
+  "bin",
   "CHANGELOG.md",
   "CODE_OF_CONDUCT.md",
   "CONTRIBUTING.md",

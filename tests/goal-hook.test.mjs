@@ -90,7 +90,7 @@ test("subagentStart injects a main-session-only boundary even when camelCase pay
   await rm(home, { recursive: true, force: true });
 });
 
-test("sessionStart without an active goal injects MCP-ready session context", async () => {
+test("sessionStart without an active goal injects no-MCP session context", async () => {
   const home = path.join(tmpdir(), `goal-hook-${process.pid}-empty-session`);
   const cwd = path.join(home, "project");
   await mkdir(cwd, { recursive: true });
@@ -109,7 +109,8 @@ test("sessionStart without an active goal injects MCP-ready session context", as
   assert.match(parsed.additionalContext, /Goal System for Copilot CLI is available/);
   assert.match(parsed.additionalContext, /Session ID: session-empty/);
   assert.match(parsed.additionalContext, /CWD: /);
-  assert.match(parsed.additionalContext, /goalSystem/);
+  assert.match(parsed.additionalContext, /No MCP server is required/);
+  assert.match(parsed.additionalContext, /goalctl\.mjs/);
   assert.match(parsed.additionalContext, /goal_system_open/);
 
   await rm(home, { recursive: true, force: true });
@@ -133,7 +134,7 @@ test("userPromptSubmitted creates a CLI draft goal on explicit goal activation",
   const parsed = JSON.parse(result.stdout);
   assert.match(parsed.additionalContext, /persisted draft goal was created/i);
   assert.match(parsed.additionalContext, /Session ID: session-cli-activate/);
-  assert.match(parsed.additionalContext, /goalSystem/);
+  assert.match(parsed.additionalContext, /goalctl/);
   assert.match(parsed.additionalContext, /goal_system_update/);
 
   const goal = JSON.parse(await readFile(path.join(home, ".copilot", "session-state", "goal-system", "by-session", "session-cli-activate.json"), "utf8"));
@@ -200,11 +201,10 @@ test("agentStop blocks a premature stop while an active goal is still open", asy
   assert.match(parsed.reason, /Session ID: session-main/);
   assert.match(parsed.reason, /CWD: /);
   assert.match(parsed.reason, /hard continuation directive/);
-  assert.match(parsed.reason, /goalSystem/);
-  assert.match(parsed.reason, /MCP equivalents/);
+  assert.match(parsed.reason, /goalctl status/);
   assert.match(parsed.reason, /goal_system_status/);
   assert.match(parsed.reason, /goal_system_update/);
-  assert.match(parsed.reason, /goal_system_close only when/);
+  assert.match(parsed.reason, /goal_system_close, or run goalctl close, only when/);
 
   await rm(home, { recursive: true, force: true });
 });

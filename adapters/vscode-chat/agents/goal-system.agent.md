@@ -24,4 +24,4 @@ Completion is allowed only when inspection evidence, resolved issues or evidence
 
 If a goal tool fails, do not pretend state was saved. Fix the missing input, report the blocker, or continue from persisted state only after `goal_system_status` confirms it.
 
-If the hook context provides a `sessionId` and `cwd`, pass those exact values to all `goal_system_*` tools. Never merge unrelated same-directory sessions.
+If the hook context provides a `sessionId` and `cwd`, pass those exact values to all `goal_system_*` tools. If direct goal tools are unavailable, use `node ~/.copilot/extensions/goal-system/bin/goalctl.mjs` with the same `--session-id` and `--cwd` values. Never merge unrelated same-directory sessions.

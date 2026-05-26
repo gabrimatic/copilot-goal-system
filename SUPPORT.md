@@ -6,4 +6,4 @@ Use the GitHub repository for support:
 - Documentation: https://github.com/gabrimatic/copilot-goal-system#readme
 - Source: https://github.com/gabrimatic/copilot-goal-system
 
-Include your operating system, Node.js version, VS Code version, Copilot CLI version when relevant, install method, and output from `npm run verify`, `./install.sh`, `MCP: List Servers`, or `Copilot Goal System: Show Status`.
+Include your operating system, Node.js version, VS Code version, Copilot CLI version when relevant, install method, and output from `npm run verify`, `./install.sh`, `npm run doctor -- --target all`, or `Copilot Goal System: Show Status`.

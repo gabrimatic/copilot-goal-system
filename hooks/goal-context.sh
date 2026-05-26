@@ -198,8 +198,10 @@ empty_session_context() {
 Goal System for Copilot CLI is available for this main session.
 Session ID: $safe_sid
 CWD: $normalized_cwd
-Goal tools may appear either as direct goal_system_* tools or as MCP tools from the goalSystem server. If using MCP tools, pass the Session ID and CWD above.
-When the prompt explicitly starts goal mode, call goal_system_open with these exact values. For active goals, use goal_system_status before continuing or closing. Subagents must not use goal tools.
+Use direct goal_system_* tools when available. If direct tools are unavailable, use:
+node "$copilot_home/extensions/goal-system/bin/goalctl.mjs" status --session-id "$safe_sid" --cwd "$normalized_cwd"
+No MCP server is required or configured by this goal system.
+When the prompt explicitly starts goal mode, call goal_system_open with these exact values, or run goalctl open with the same Session ID and CWD. For active goals, use goal_system_status or goalctl status before continuing or closing. Subagents must not use goal tools.
 EOF_EMPTY
 }
 
@@ -303,7 +305,7 @@ Goal ID: $(printf '%s' "$draft_json" | jq -r '.id')
 Session ID: $safe_sid
 CWD: $normalized_cwd
 Objective: $objective
-Goal tools may appear either as direct goal_system_* tools or as MCP tools from the goalSystem server. If direct tools are unavailable, use the goalSystem MCP equivalents with the exact Session ID and CWD above.
+Use direct goal_system_* tools when available. If direct tools are unavailable, use local goalctl with the exact Session ID and CWD above.
 Inspect the real environment before treating any detail as fact, then call goal_system_update with verified facts before doing substantive work.
 Do not answer with only an acknowledgment. Continue the real task and close only after proof.
 EOF_ACTIVATION
@@ -348,7 +350,7 @@ Remaining: $remaining
 Blockers: $blockers
 Validation/proof: $validation
 Updated at: $updated_at
-Goal tools may appear either as direct SDK tools or as MCP tools from the goalSystem server. If using MCP tools, pass the Session ID and CWD above. Use goal_system_status for authoritative state before continuing or closing. Do not mark complete without real inspection evidence, resolved issues, verification results, and completion audit.
+Use direct goal_system_* tools when available. If direct tools are unavailable, use local goalctl with the Session ID and CWD above. Use goal_system_status or goalctl status for authoritative state before continuing or closing. Do not mark complete without real inspection evidence, resolved issues, verification results, and completion audit.
 EOF_CONTEXT
 )
 
@@ -370,12 +372,12 @@ Remaining: $remaining
 Blockers: $blockers
 
 This is a hard continuation directive. Do not produce a final answer, do not ask for permission to continue, and do not bypass the guard by copying unresolved issue text into resolvedIssues.
-Goal tools may appear either as direct goal_system_* tools or as MCP tools from the goalSystem server. If direct tools are unavailable, use the goalSystem MCP equivalents with the exact Session ID and CWD above.
+Use direct goal_system_* tools when available. If direct tools are unavailable, use local goalctl with the exact Session ID and CWD above.
 Your next actions must be:
-1. Call goal_system_status to reload authoritative state.
+1. Call goal_system_status, or run goalctl status, to reload authoritative state.
 2. Continue the next concrete remaining item. If remaining is empty but the goal is open, inspect the real state and update remaining or close with evidence.
-3. Call goal_system_update after meaningful inspection, fixes, blockers, verification, or remaining-work changes.
-4. Call goal_system_close only when completion, blockage, or cancellation is supported by exact evidence and the completion audit passes.
+3. Call goal_system_update, or run goalctl update, after meaningful inspection, fixes, blockers, verification, or remaining-work changes.
+4. Call goal_system_close, or run goalctl close, only when completion, blockage, or cancellation is supported by exact evidence and the completion audit passes.
 EOF_REASON
 )
     jq -n --arg reason "$reason" '{decision: "block", reason: $reason}'

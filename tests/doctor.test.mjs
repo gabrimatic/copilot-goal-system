@@ -38,7 +38,7 @@ function isolatedEnv(home, fakeBin, extra = {}) {
   };
 }
 
-test("doctor reports a healthy all-target install with CLI MCP fallback", async () => {
+test("doctor reports a healthy all-target no-MCP install", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "goal-doctor-"));
   const fakeBin = path.join(home, "bin");
   await mkdir(fakeBin, { recursive: true });
@@ -62,11 +62,10 @@ test("doctor reports a healthy all-target install with CLI MCP fallback", async 
   const report = JSON.parse(stdout);
   assert.equal(report.ok, true);
   assert.equal(report.target, "all");
-  assert.equal(report.checks.find((item) => item.label === "Copilot CLI MCP goal server").ok, true);
-  assert.equal(report.checks.find((item) => item.label === "Configured CLI MCP self-test").ok, true);
-  assert.equal(report.checks.find((item) => item.label === "Copilot CLI loads goalSystem MCP").ok, true);
-  assert.equal(report.checks.find((item) => item.label === "VS Code MCP goal server").ok, true);
-  assert.equal(report.checks.find((item) => item.label === "Configured VS Code MCP self-test").ok, true);
+  assert.equal(report.checks.find((item) => item.label === "Local goalctl command").ok, true);
+  assert.equal(report.checks.find((item) => item.label === "goalctl self-test").ok, true);
+  assert.equal(report.checks.find((item) => item.label === "No legacy CLI goalSystem server").ok, true);
+  assert.equal(report.checks.find((item) => item.label === "No legacy VS Code goalSystem server").ok, true);
 
   const installedDoctor = path.join(home, ".copilot", "extensions", "goal-system", "scripts", "doctor.mjs");
   const installedDoctorResult = await execFileAsync(process.execPath, [installedDoctor, "--home", home, "--target", "all", "--json"], {
@@ -76,13 +75,12 @@ test("doctor reports a healthy all-target install with CLI MCP fallback", async 
   });
   assert.equal(JSON.parse(installedDoctorResult.stdout).ok, true);
 
-  const cliMcpConfig = JSON.parse(await readFile(path.join(home, ".copilot", "mcp-config.json"), "utf8"));
-  assert.equal(cliMcpConfig.mcpServers.goalSystem.type, "local");
+  await assert.rejects(readFile(path.join(home, ".copilot", "mcp-config.json"), "utf8"), /ENOENT/);
 
   await rm(home, { recursive: true, force: true });
 });
 
-test("doctor accepts JSONC Copilot and VS Code config files", async () => {
+test("doctor accepts JSONC settings and legacy server config files without goalSystem entries", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "goal-doctor-jsonc-"));
   const fakeBin = path.join(home, "bin");
   await mkdir(fakeBin, { recursive: true });
@@ -100,9 +98,28 @@ test("doctor accepts JSONC Copilot and VS Code config files", async () => {
   const settingsPath = path.join(home, ".copilot", "settings.json");
   const cliMcpConfigPath = path.join(home, ".copilot", "mcp-config.json");
   const vscodeMcpConfigPath = defaultVscodeMcpConfigPath(home);
+  await mkdir(path.dirname(vscodeMcpConfigPath), { recursive: true });
   await writeFile(settingsPath, withTopLevelJsoncComment(await readFile(settingsPath, "utf8"), "settings remain valid JSONC"));
-  await writeFile(cliMcpConfigPath, withTopLevelJsoncComment(await readFile(cliMcpConfigPath, "utf8"), "CLI MCP remains valid JSONC"));
-  await writeFile(vscodeMcpConfigPath, withTopLevelJsoncComment(await readFile(vscodeMcpConfigPath, "utf8"), "VS Code MCP remains valid JSONC"));
+  await writeFile(
+    cliMcpConfigPath,
+    `{
+  // CLI server config remains valid JSONC.
+  "mcpServers": {
+    "playwright": { "type": "stdio", "command": "npx" },
+  },
+}
+`
+  );
+  await writeFile(
+    vscodeMcpConfigPath,
+    `{
+  // VS Code server config remains valid JSONC.
+  "servers": {
+    "existingServer": { "type": "stdio", "command": "node" },
+  },
+}
+`
+  );
 
   const { stdout } = await execFileAsync(process.execPath, [doctor, "--home", home, "--target", "all", "--json"], {
     cwd: root,
@@ -113,17 +130,22 @@ test("doctor accepts JSONC Copilot and VS Code config files", async () => {
   const report = JSON.parse(stdout);
   assert.equal(report.ok, true);
   assert.equal(report.checks.find((item) => item.label === "CLI settings JSON").ok, true);
-  assert.equal(report.checks.find((item) => item.label === "Copilot CLI MCP goal server").ok, true);
-  assert.equal(report.checks.find((item) => item.label === "VS Code MCP goal server").ok, true);
+  assert.equal(report.checks.find((item) => item.label === "No legacy CLI goalSystem server").ok, true);
+  assert.equal(report.checks.find((item) => item.label === "No legacy VS Code goalSystem server").ok, true);
 
   await rm(home, { recursive: true, force: true });
 });
 
-test("doctor honors explicit VS Code MCP config paths", async () => {
+test("doctor honors explicit legacy VS Code server cleanup paths", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "goal-doctor-vscode-path-"));
   const fakeBin = path.join(home, "bin");
   const vscodeMcpConfigPath = path.join(home, "custom-vscode", "mcp.json");
   await mkdir(fakeBin, { recursive: true });
+  await mkdir(path.dirname(vscodeMcpConfigPath), { recursive: true });
+  await writeFile(
+    vscodeMcpConfigPath,
+    JSON.stringify({ servers: { goalSystem: { type: "stdio", command: "node", args: ["/tmp/old/mcp-server.mjs"] } } }, null, 2)
+  );
   const fakeCopilot = path.join(fakeBin, "copilot");
   await writeFile(fakeCopilot, "#!/usr/bin/env bash\nprintf 'GitHub Copilot CLI 1.0.45.\\n'\n");
   await chmod(fakeCopilot, 0o755);
@@ -143,8 +165,10 @@ test("doctor honors explicit VS Code MCP config paths", async () => {
 
   const report = JSON.parse(stdout);
   assert.equal(report.ok, true);
-  assert.equal(report.paths.vscodeMcpConfigPath, vscodeMcpConfigPath);
-  assert.equal(report.checks.find((item) => item.label === "VS Code MCP goal server").ok, true);
+  assert.equal(report.paths.legacyVscodeConfigPath, vscodeMcpConfigPath);
+  assert.equal(report.checks.find((item) => item.label === "No legacy VS Code goalSystem server").ok, true);
+  const config = JSON.parse(await readFile(vscodeMcpConfigPath, "utf8"));
+  assert.equal(config.servers.goalSystem, undefined);
 
   await rm(home, { recursive: true, force: true });
 });
@@ -204,13 +228,13 @@ test("doctor can scope health checks to CLI-only installs", async () => {
   const report = JSON.parse(stdout);
   assert.equal(report.ok, true);
   assert.equal(report.target, "cli");
-  assert.equal(report.checks.some((item) => item.label === "VS Code MCP goal server"), false);
+  assert.equal(report.checks.some((item) => item.label === "No legacy VS Code goalSystem server"), false);
 
   await rm(home, { recursive: true, force: true });
 });
 
-test("doctor fails stale CLI MCP config paths instead of self-testing the expected path", async () => {
-  const home = await mkdtemp(path.join(os.tmpdir(), "goal-doctor-stale-mcp-"));
+test("doctor fails when a legacy CLI goalSystem server entry remains", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "goal-doctor-legacy-server-"));
   const fakeBin = path.join(home, "bin");
   await mkdir(fakeBin, { recursive: true });
   const fakeCopilot = path.join(fakeBin, "copilot");
@@ -225,9 +249,10 @@ test("doctor fails stale CLI MCP config paths instead of self-testing the expect
   });
 
   const mcpConfigPath = path.join(home, ".copilot", "mcp-config.json");
-  const mcpConfig = JSON.parse(await readFile(mcpConfigPath, "utf8"));
-  mcpConfig.mcpServers.goalSystem.args = ["/tmp/dead/mcp-server.mjs"];
-  await writeFile(mcpConfigPath, `${JSON.stringify(mcpConfig, null, 2)}\n`);
+  await writeFile(
+    mcpConfigPath,
+    `${JSON.stringify({ mcpServers: { goalSystem: { type: "stdio", command: "node", args: ["/tmp/dead/mcp-server.mjs"] } } }, null, 2)}\n`
+  );
 
   await assert.rejects(
     execFileAsync(process.execPath, [doctor, "--home", home, "--json"], {
@@ -237,11 +262,9 @@ test("doctor fails stale CLI MCP config paths instead of self-testing the expect
     }),
     (error) => {
       const report = JSON.parse(error.stdout);
-      const mcpCheck = report.checks.find((item) => item.label === "Copilot CLI MCP goal server");
-      const selfTest = report.checks.find((item) => item.label === "Configured CLI MCP self-test");
-      assert.equal(mcpCheck.ok, false);
-      assert.match(mcpCheck.details, /\/tmp\/dead\/mcp-server\.mjs/);
-      assert.equal(selfTest.ok, false);
+      const legacyCheck = report.checks.find((item) => item.label === "No legacy CLI goalSystem server");
+      assert.equal(legacyCheck.ok, false);
+      assert.match(legacyCheck.details, /mcp-config\.json/);
       return true;
     }
   );

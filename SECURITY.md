@@ -21,10 +21,10 @@ The state model redacts common secrets, emails, tokens, passwords, API keys, bea
 
 | Surface | Permission | Scope |
 |---------|------------|-------|
-| Installer | Filesystem writes | `~/.copilot/extensions/goal-system`, `~/.copilot/skills/goal`, `~/.copilot/agents`, `~/.copilot/hooks`, `~/.copilot/settings.json`, `~/.copilot/copilot-instructions.md`, VS Code profile `mcp.json` |
+| Installer | Filesystem writes | `~/.copilot/extensions/goal-system`, `~/.copilot/skills/goal`, `~/.copilot/agents`, `~/.copilot/hooks`, `~/.copilot/settings.json`, `~/.copilot/copilot-instructions.md`; legacy `goalSystem` server entries are removed from old local config when parseable |
 | Extension | Filesystem writes | Local install files and goal state under `~/.copilot/session-state/goal-system` |
 | Hook | Filesystem reads/writes | Reads goal state, writes compact snapshots and tool-history summaries |
-| MCP server | Filesystem reads/writes | Reads and updates local goal state for VS Code Chat tool calls |
+| goalctl | Filesystem reads/writes | Reads and updates local goal state when direct goal tools are unavailable |
 | npm | Network | Installs package dependencies during setup |
 
 ## Trust boundaries
@@ -34,10 +34,8 @@ The state model redacts common secrets, emails, tokens, passwords, API keys, bea
 | Prompt input | Untrusted input | Stored only as redacted hash/preview. |
 | Tool summaries | Untrusted input | Redacted and truncated before persistence. |
 | `~/.copilot/settings.json` | User-controlled | Installer merges goal hooks and preserves existing settings. |
-| VS Code profile `mcp.json` | Local config | Installer merges the `goalSystem` server and preserves existing servers. |
 | Subagents | Untrusted for goal state | Subagents receive boundary instructions and goal tools reject likely subagent invocations. |
 | Copilot SDK | Trusted dependency | Pinned in `package-lock.json`. |
-| MCP SDK | Trusted dependency | Pinned in `package-lock.json`. |
 
 ## Vulnerability reporting
 

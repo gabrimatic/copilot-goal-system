@@ -38,7 +38,7 @@ For both adapters, run:
 Copilot Goal System: Install Recommended Setup
 ```
 
-The VS Code extension uses your current OS account's home directory by default. Set `copilotGoalSystem.homeOverride` when you need to install into a different local profile. Set `copilotGoalSystem.vscodeMcpConfigPathOverride` only if your VS Code MCP config lives outside the detected profile path.
+The VS Code extension uses your current OS account's home directory by default. Set `copilotGoalSystem.homeOverride` when you need to install into a different local profile.
 
 ### Terminal
 
@@ -76,31 +76,28 @@ After installing `cli` or `all`, restart Copilot CLI:
 
 ```text
 /skills reload
-/mcp show
 /env
 ```
 
-Confirm `goalSystem` appears in the MCP server list. From the shell, you can also run `copilot mcp get goalSystem --json`.
-
-After installing only `vscode-chat`, reload VS Code or run `MCP: Reset Cached Tools`, then confirm `goalSystem` appears under `MCP: List Servers`.
+Confirm the `goal` skill appears and the extension tools are visible. After installing only `vscode-chat`, reload VS Code, then select the `Goal System` custom agent.
 
 ## What gets installed
 
 | Path | Purpose |
 |------|---------|
 | `~/.copilot/extensions/goal-system/` | Extension package, tests, docs, hook config, and dependencies. |
+| `~/.copilot/extensions/goal-system/bin/goalctl.mjs` | Local no-MCP command fallback for goal status, open, update, and close. |
 | `~/.copilot/skills/goal/SKILL.md` | Goal-mode skill used by Copilot. |
 | `~/.copilot/hooks/goal-context.sh` | CLI lifecycle hook helper. |
-| `~/.copilot/mcp-config.json` | `goalSystem` MCP fallback server for Copilot CLI goal tools. |
 | `~/.copilot/hooks/goal-system-vscode.json` | VS Code Chat lifecycle hook config. |
 | `~/.copilot/agents/goal-system.agent.md` | VS Code Chat custom agent. |
-| VS Code profile `mcp.json` | `goalSystem` stdio MCP server config. |
 | `~/.copilot/settings.json` | Hook entries are merged into existing settings. |
 | `~/.copilot/copilot-instructions.md` | A short goal-system reminder is appended once. |
 
 The installer preserves existing settings. It appends missing goal hooks, leaves unrelated hooks alone, and recognizes existing goal hooks written with `~`, `$HOME`, `$COPILOT_HOME`, absolute paths, or wrapper commands. If a composite user hook already runs `goal-context.sh`, the installer keeps that hook and does not add a duplicate direct goal hook. Empty JSON or JSONC config files are initialized as empty objects. Malformed JSON/JSONC or parseable non-object target config files are preserved as `*.invalid-backup-*`, replaced with a clean JSON object, and then updated so reinstall and update flows can recover from broken local config.
 
-Copilot CLI `settings.json`, Copilot CLI `mcp-config.json`, and VS Code profile `mcp.json` are handled as JSONC-compatible config files. Comments and trailing commas are accepted, and comments outside the exact updated subtree are preserved while the installer updates `hooks`, `mcpServers.goalSystem`, or `servers.goalSystem`.
+Copilot CLI `settings.json` is handled as a JSONC-compatible config file. Comments and trailing commas are accepted, and comments outside the exact updated subtree are preserved while the installer updates `hooks`.
+Older releases created `goalSystem` server entries in local config. Current installs remove those legacy entries when the config file is parseable, but do not create or rely on any MCP server.
 Config backups keep the original file permissions, and newly created config files default to owner-only permissions.
 
 Runtime updates are prepared in a temporary directory first. The installer copies the new package, runs `npm ci --omit=dev --ignore-scripts`, and marks runtime entrypoints executable before replacing `~/.copilot/extensions/goal-system/`. If dependency installation fails, the previous runtime remains in place and config files are not changed.
@@ -137,13 +134,13 @@ Stop
 
 `UserPromptSubmit` is required for VS Code Chat to persist a draft goal immediately when a prompt starts `/goal`, inject active-goal context on each prompt, and load one unambiguous same-directory goal on explicit continuation.
 
-The CLI install also adds this MCP server:
+The CLI install also adds `goalctl`, a local command fallback:
 
-```text
-goalSystem
+```bash
+node ~/.copilot/extensions/goal-system/bin/goalctl.mjs status --session-id "$SESSION_ID" --cwd "$PWD"
 ```
 
-This is a compatibility fallback for standard Copilot CLI sessions. Goal tools may appear as direct SDK tools or as MCP tools from the `goalSystem` server. In Copilot CLI, MCP tools may be prefixed by the server name, for example `goalSystem-goal_system_update`. Hook context includes the current `sessionId` and `cwd` so MCP tool calls can target the correct persisted goal.
+Goal tools appear as direct SDK tools in Copilot CLI. If direct tools are unavailable, hook context includes the current `sessionId` and `cwd` so `goalctl` can target the same persisted goal.
 
 ## Update
 
@@ -176,18 +173,15 @@ For both adapters:
 npm run doctor -- --target all
 ```
 
-If you installed VS Code Chat with a custom MCP config path, pass the same path to doctor with `--vscode-mcp-config`.
-
 Restart Copilot CLI after updating.
 
 After restarting Copilot CLI, run:
 
 ```text
-/mcp show
 /env
 ```
 
-Confirm `goalSystem` appears in the MCP server list and the goal skill is loaded.
+Confirm the goal skill is loaded and the direct goal tools are visible.
 
 Updates replace the installed runtime snapshot instead of overlaying files, so files removed from newer releases do not remain active in `~/.copilot/extensions/goal-system/`.
 Updates also clean up duplicate direct goal hook entries from older installs while preserving composite hooks that include user-managed context helpers.
@@ -237,8 +231,7 @@ Also remove the marked snippet in `~/.copilot/copilot-instructions.md`:
 <!-- copilot-goal-system snippet end -->
 ```
 
-Then remove the `goalSystem` entry from the VS Code profile `mcp.json`.
-Also remove the `goalSystem` entry from `~/.copilot/mcp-config.json`.
+Current installers remove legacy `goalSystem` server entries when those old config files are parseable. If you are uninstalling by hand, remove any remaining `goalSystem` entries from old local server config files as cleanup only.
 
 ## Troubleshooting
 
@@ -267,21 +260,13 @@ Run `goal_system_status` inside Copilot before continuing. If no state exists, s
 
 Call `goal_system_update` with real progress, inspection evidence, verification results, remaining work, or blockers. If the goal tools are missing, the default guard should still allow recovery tool calls; rerun the installer to remove stale CLI `preToolUse` or `postToolUse` goal hooks from older installs.
 
-If direct goal tools are missing, check whether MCP fallback tools are available:
-
-```text
-/mcp show
-/env
-```
-
-From the shell, run:
+If direct goal tools are missing, use the local command fallback from the shell:
 
 ```bash
-copilot mcp list
-copilot mcp get goalSystem --json
+node ~/.copilot/extensions/goal-system/bin/goalctl.mjs status --session-id "<session-id-from-hook-context>" --cwd "<cwd-from-hook-context>"
 ```
 
-If `goalSystem` is missing, rerun the installer and restart Copilot CLI. If `goalSystem` appears but tools are still absent, restart Copilot CLI, run `npm run doctor -- --target cli`, and check whether the doctor MCP self-test reports a local server failure.
+Then rerun the installer, restart Copilot CLI, run `npm run doctor -- --target cli`, and check the `goalctl self-test` result.
 
 ### Status reports duplicate CLI goal hooks
 
@@ -289,13 +274,7 @@ Run the installer again. It normalizes direct `goal-context.sh` entries, keeps a
 
 ### VS Code Chat tools do not appear
 
-Run:
-
-```text
-MCP: Reset Cached Tools
-```
-
-Then reload VS Code. Confirm the `goalSystem` MCP server appears under `MCP: List Servers`.
+Reload VS Code and select the `Goal System` custom agent. If the direct VS Code goal tools are still unavailable, use `goalctl` with the `sessionId` and `cwd` from hook context, then run `Copilot Goal System: Show Status`.
 
 ### A stop is blocked
 

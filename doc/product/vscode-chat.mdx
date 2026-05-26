@@ -1,9 +1,9 @@
 ---
 title: "VS Code Copilot Chat"
-description: "Preview adapter details, installed files, enforcement behavior, MCP tools, and limits."
+description: "Preview adapter details, installed files, enforcement behavior, direct tools, and limits."
 ---
 
-The VS Code Copilot Chat adapter brings persisted goal mode into VS Code through a custom agent, lifecycle hooks, and a local MCP server.
+The VS Code Copilot Chat adapter brings persisted goal mode into VS Code through a custom agent, lifecycle hooks, direct VS Code language model tools, and the local `goalctl` fallback command.
 
 This adapter is **preview** because VS Code agent hooks and agent plugins are Preview surfaces. The Copilot CLI adapter remains the stable strict mode.
 
@@ -12,8 +12,8 @@ This adapter is **preview** because VS Code agent hooks and agent plugins are Pr
 | Requirement | Notes |
 |-------------|-------|
 | VS Code with Copilot Chat | Agent mode must be available. |
-| Node.js `>= 20` | Runs the hook runner and MCP server. |
-| MCP access | Organizations can disable MCP. |
+| VS Code `>= 1.95` | Required for extension-contributed language model tools. |
+| Node.js `>= 20` | Runs the hook runner and local goalctl fallback. |
 | Hook access | Organizations can disable agent hooks. |
 
 ## Install
@@ -36,13 +36,7 @@ Install both adapters:
 ./install.sh --target all
 ```
 
-After install, reload VS Code or run:
-
-```text
-MCP: Reset Cached Tools
-```
-
-Then select the `Goal System` custom agent in Copilot Chat.
+After install, reload VS Code and select the `Goal System` custom agent in Copilot Chat.
 
 After Marketplace extension updates, VS Code compares the bundled runtime version with the local files in `~/.copilot/extensions/goal-system/`. If local files are stale, the status bar changes to `Goal Update` and VS Code prompts you to update them.
 Updating local files replaces the installed runtime snapshot, so stale files from older releases do not keep running.
@@ -52,12 +46,12 @@ Updating local files replaces the installed runtime snapshot, so stale files fro
 | Path | Purpose |
 |------|---------|
 | `~/.copilot/extensions/goal-system/` | Shared package, core, adapters, tests, docs, and dependencies. |
+| `~/.copilot/extensions/goal-system/bin/goalctl.mjs` | Local no-MCP command fallback for goal operations. |
 | `~/.copilot/agents/goal-system.agent.md` | VS Code custom agent instructions. |
 | `~/.copilot/hooks/goal-system-vscode.json` | VS Code hook config with PascalCase lifecycle events. |
-| VS Code profile `mcp.json` | Adds the `goalSystem` stdio MCP server. |
 | `~/.copilot/session-state/goal-system/` | Shared persisted goal state. |
 
-The installer writes backups before changing an existing MCP config, hook config, or custom agent file.
+The installer writes backups before changing hook config or custom agent files. Older `goalSystem` server entries from previous releases are removed when the old config file is parseable; current installs do not create a server.
 
 ## Enforcement
 
@@ -79,9 +73,9 @@ If the same goal has been resumed into another session, same-directory continuat
 
 Renamed, merged, duplicate, superseded, and clearer-worded discovered issues must be recorded as evidence-backed `issueResolutions`. They do not disappear from completion checks just because the wording changed.
 
-## MCP Tools
+## Goal Tools
 
-The local MCP server exposes:
+The VS Code extension contributes:
 
 ```text
 goal_system_status
@@ -91,12 +85,14 @@ goal_system_close
 ```
 
 All tools require the `sessionId` and `cwd` that the hook injects into the chat context. This keeps VS Code Chat sessions isolated even when several sessions share one workspace.
+If direct tools are unavailable, run the same operation through `goalctl` with those values.
 
 ## Limits
 
 - VS Code hooks are Preview and can change.
-- Organizations can disable hooks or MCP.
-- The adapter cannot force goal behavior if you do not select the `Goal System` agent and Copilot ignores available MCP tools.
+- Organizations can disable hooks or extension tools.
+- The adapter cannot force goal behavior if you do not select the `Goal System` agent and Copilot ignores available direct tools.
+- VS Code asks for confirmation before extension-contributed language model tools run. Choose Always Allow for the Goal System tools to avoid repeated prompts.
 - Hook output depends on VS Code honoring the documented lifecycle events.
 
 With those surfaces available, VS Code Chat gets the same core persistence, drift control, subagent boundary, and proof-based completion rules as the CLI adapter.
@@ -105,19 +101,7 @@ With those surfaces available, VS Code Chat gets the same core persistence, drif
 
 ### Goal tools do not appear
 
-Run:
-
-```text
-MCP: Reset Cached Tools
-```
-
-Then reload VS Code. If tools still do not appear, run:
-
-```text
-MCP: List Servers
-```
-
-Confirm the `goalSystem` server is present and starts without errors.
+Reload VS Code and select the `Goal System` custom agent. If tools still do not appear, use `goalctl` with the `sessionId` and `cwd` from hook context, then run `Copilot Goal System: Show Status`.
 
 ### Hooks do not run
 

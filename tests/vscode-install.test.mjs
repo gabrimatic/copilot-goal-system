@@ -12,7 +12,7 @@ const root = path.resolve(".");
 const installer = path.join(root, "scripts", "install.mjs");
 process.env.GOAL_SYSTEM_TEST_LINK_NODE_MODULES = path.join(root, "node_modules");
 
-test("installer can add VS Code Chat adapter without overwriting existing MCP servers", async () => {
+test("installer can add VS Code Chat adapter and remove only legacy goalSystem server", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "goal-vscode-install-"));
   const mcpConfigPath = path.join(home, "Code", "User", "mcp.json");
   await execFileAsync("mkdir", ["-p", path.dirname(mcpConfigPath)]);
@@ -25,6 +25,11 @@ test("installer can add VS Code Chat adapter without overwriting existing MCP se
             type: "stdio",
             command: "node",
             args: ["existing.mjs"],
+          },
+          goalSystem: {
+            type: "stdio",
+            command: "node",
+            args: ["/tmp/old/mcp-server.mjs"],
           },
         },
       },
@@ -49,13 +54,12 @@ test("installer can add VS Code Chat adapter without overwriting existing MCP se
   const agent = await readFile(path.join(home, ".copilot", "agents", "goal-system.agent.md"), "utf8");
   assert.match(agent, /name: Goal System/);
   assert.match(agent, /goal_system_open/);
+  assert.match(agent, /goalctl/);
   assert.match(agent, /main-session only/);
 
   const mcpConfig = JSON.parse(await readFile(mcpConfigPath, "utf8"));
   assert.equal(mcpConfig.servers.existingServer.command, "node");
-  assert.equal(mcpConfig.servers.goalSystem.type, "stdio");
-  assert.match(mcpConfig.servers.goalSystem.args[0], /mcp-server\.mjs/);
-  assert.equal(mcpConfig.servers.goalSystem.env.GOAL_SYSTEM_ADAPTER, "vscode-chat");
+  assert.equal(mcpConfig.servers.goalSystem, undefined);
 
   const findResult = await execFileAsync("find", [path.dirname(mcpConfigPath), "-name", "*.backup-*"], { encoding: "utf8" });
   assert.match(findResult.stdout, /mcp\.json\.backup-/);
@@ -63,7 +67,7 @@ test("installer can add VS Code Chat adapter without overwriting existing MCP se
   await rm(home, { recursive: true, force: true });
 });
 
-test("installer recovers corrupt VS Code MCP config by preserving an invalid backup", async () => {
+test("installer ignores corrupt legacy VS Code server config while installing", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "goal-vscode-install-bad-json-"));
   const mcpConfigPath = path.join(home, "Code", "User", "mcp.json");
   await execFileAsync("mkdir", ["-p", path.dirname(mcpConfigPath)]);
@@ -75,27 +79,25 @@ test("installer recovers corrupt VS Code MCP config by preserving an invalid bac
     maxBuffer: 1024 * 1024 * 12,
   });
 
-  assert.match(stderr, /could not be used as VS Code MCP config/);
+  assert.match(stderr, /could not be inspected for legacy VS Code MCP server/);
   const backups = await execFileAsync("find", [home, "-name", "mcp.json.invalid-backup-*"], { encoding: "utf8" });
-  const backupPaths = backups.stdout.trim().split("\n").filter(Boolean);
-  assert.equal(backupPaths.length, 1);
-  assert.equal(await readFile(backupPaths[0], "utf8"), "{bad json");
-  const mcpConfig = JSON.parse(await readFile(mcpConfigPath, "utf8"));
-  assert.equal(mcpConfig.servers.goalSystem.type, "stdio");
+  assert.equal(backups.stdout.trim(), "");
+  assert.equal(await readFile(mcpConfigPath, "utf8"), "{bad json");
 
   await rm(home, { recursive: true, force: true });
 });
 
-test("installer accepts VS Code MCP JSONC without stripping existing comments", async () => {
+test("installer accepts VS Code server JSONC and removes legacy goalSystem without stripping comments", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "goal-vscode-install-jsonc-"));
   const mcpConfigPath = path.join(home, "Code", "User", "mcp.json");
   await execFileAsync("mkdir", ["-p", path.dirname(mcpConfigPath)]);
   await writeFile(
     mcpConfigPath,
     `{
-  // VS Code MCP config is commonly edited as JSONC.
+  // VS Code server config is commonly edited as JSONC.
   "servers": {
     "existingServer": { "type": "stdio", "command": "node", "args": ["existing.mjs"] },
+    "goalSystem": { "type": "stdio", "command": "node", "args": ["/tmp/old/mcp-server.mjs"] },
   },
 }
 `
@@ -108,16 +110,15 @@ test("installer accepts VS Code MCP JSONC without stripping existing comments", 
   });
 
   const raw = await readFile(mcpConfigPath, "utf8");
-  assert.match(raw, /VS Code MCP config is commonly edited as JSONC/);
+  assert.match(raw, /VS Code server config is commonly edited as JSONC/);
   const mcpConfig = parseJsonc(raw);
   assert.equal(mcpConfig.servers.existingServer.command, "node");
-  assert.equal(mcpConfig.servers.goalSystem.type, "stdio");
-  assert.match(mcpConfig.servers.goalSystem.args[0], /mcp-server\.mjs/);
+  assert.equal(mcpConfig.servers.goalSystem, undefined);
 
   await rm(home, { recursive: true, force: true });
 });
 
-test("installer treats an empty VS Code MCP config as an empty MCP object", async () => {
+test("installer leaves an empty legacy VS Code server config untouched", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "goal-vscode-install-empty-json-"));
   const mcpConfigPath = path.join(home, "Code", "User", "mcp.json");
   await execFileAsync("mkdir", ["-p", path.dirname(mcpConfigPath)]);
@@ -129,9 +130,7 @@ test("installer treats an empty VS Code MCP config as an empty MCP object", asyn
     maxBuffer: 1024 * 1024 * 12,
   });
 
-  const mcpConfig = JSON.parse(await readFile(mcpConfigPath, "utf8"));
-  assert.equal(mcpConfig.servers.goalSystem.type, "stdio");
-  assert.match(mcpConfig.servers.goalSystem.args[0], /mcp-server\.mjs/);
+  assert.equal(await readFile(mcpConfigPath, "utf8"), "");
 
   await rm(home, { recursive: true, force: true });
 });
