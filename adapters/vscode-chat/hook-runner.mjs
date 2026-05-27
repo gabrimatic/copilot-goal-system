@@ -105,7 +105,7 @@ function emptySessionContextNote(sessionId, cwd) {
     "Goal System for VS Code Chat is available for this main session.",
     `sessionId: ${sessionId}`,
     `cwd: ${cwd}`,
-    "When the prompt explicitly starts goal mode, call goal_system_open with these exact values. If direct goal tools are unavailable, use local goalctl with the same sessionId and cwd. For active goals, use goal_system_status or goalctl status before continuing or closing. Subagents must not use goal tools.",
+    "When the prompt explicitly starts goal mode, call goal_system_open with these exact values. If direct goal tools are unavailable, run local goalctl as a command with the same sessionId and cwd. Treat goalctl as a command API, not a file to inspect. For active goals, use goal_system_status or goalctl status before continuing or closing. Subagents must not use goal tools.",
   ].join("\n");
 }
 
@@ -114,7 +114,7 @@ function draftActivationMessage(goal) {
     "A persisted draft goal was created for this VS Code Chat main session.",
     `Goal ID: ${goal.id || "unknown"}`,
     `Objective: ${goal.objective || "unknown until inspected"}`,
-    "Inspect the real environment before treating any detail as fact, then call goal_system_update with verified facts before doing substantive work.",
+    "Inspect the user-requested target workspace, runtime, or artifact before treating any task detail as fact, then call goal_system_update with verified facts before doing substantive work. Do not inspect installed goal-system runtime files unless the task is to debug the goal system itself.",
     "Do not answer with only an acknowledgment. Continue the real task and close only after proof.",
   ].join("\n");
 }
@@ -151,10 +151,10 @@ async function main() {
         const draftGoal = createGoalRecord(
           {
             objective: trimmedPromptObjective(prompt),
-            requirements: ["Inspect the real environment before treating any unverified detail as fact."],
+            requirements: ["Inspect the user-requested target before treating any unverified task detail as fact."],
             doneSoFar: ["Draft goal record created from the explicit goal-mode prompt."],
             remaining: [
-              "Inspect the real environment and replace draft fields with verified facts.",
+              "Inspect the user-requested target workspace, runtime, or artifact and replace draft fields with verified facts.",
               "Execute the goal, record discovered issues, fix them, verify with evidence, and close only after audit.",
             ],
             completionStatus: "draft",

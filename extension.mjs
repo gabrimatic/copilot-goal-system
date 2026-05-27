@@ -153,7 +153,8 @@ function appendActivationInstructions(prompt) {
     prompt,
     [
       "A persisted draft goal was created for this main session only.",
-      "Do not answer with only 'goal-system loaded'. Inspect the real environment first, then call goal_system_update with verified facts before doing substantive work.",
+      "Do not answer with only 'goal-system loaded'. Inspect the user-requested target workspace, runtime, or artifact first, then call goal_system_update with verified facts before doing substantive work.",
+      "Treat goal_system_* tools and local goalctl as the goal-state API. Do not read installed goal-system runtime files unless the user's task is to debug the goal system itself.",
       "This is execution mode when the prompt asks for execution: inspect, fix, verify, and prove. Do not keep the goal only in conversation memory.",
     ].join("\n")
   );
@@ -245,10 +246,10 @@ const session = await joinSession({
         const draftGoal = createGoalRecord(
           {
             objective: trimmedPromptObjective(prompt),
-            requirements: ["Inspect the real environment before treating any unverified detail as fact."],
+            requirements: ["Inspect the user-requested target before treating any unverified task detail as fact."],
             doneSoFar: ["Draft goal record created from the explicit goal-mode prompt."],
             remaining: [
-              "Inspect the real environment and replace draft fields with verified facts.",
+              "Inspect the user-requested target workspace, runtime, or artifact and replace draft fields with verified facts.",
               "Execute the goal, record discovered issues, fix them, verify with evidence, and close only after audit.",
             ],
             completionStatus: "draft",

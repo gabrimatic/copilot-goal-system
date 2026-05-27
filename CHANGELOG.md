@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.20
+
+- Reframes goalctl and installed goal-system files as control-plane APIs so agents use status/update/close commands instead of reading implementation files.
+- Requires ordinary goal completion evidence to come from the user-requested target; installed goal-system control-plane reads no longer count as task inspection evidence.
+- Updates CLI and VS Code hook prompts to steer inspection toward the target workspace, runtime, or artifact.
+
 ## 1.1.19
 
 - Makes goal audit writes deterministic so `goalctl close` records the close event before the CLI process exits.

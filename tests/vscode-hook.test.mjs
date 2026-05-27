@@ -243,12 +243,13 @@ test("VS Code UserPromptSubmit creates a persisted draft goal on explicit activa
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.continue, true);
   assert.match(parsed.systemMessage, /persisted draft goal was created/i);
-  assert.match(parsed.systemMessage, /inspect the real environment/i);
+  assert.match(parsed.systemMessage, /inspect the user-requested target/i);
+  assert.match(parsed.systemMessage, /Do not inspect installed goal-system runtime files/);
 
   const goal = JSON.parse(await readFile(path.join(home, ".copilot", "session-state", "goal-system", "by-session", "session-activate.json"), "utf8"));
   assert.equal(goal.objective, "fix the release flow end to end");
   assert.equal(goal.completionStatus, "draft");
-  assert.match(goal.remaining.join("\n"), /Inspect the real environment/);
+  assert.match(goal.remaining.join("\n"), /Inspect the user-requested target/);
 
   await rm(home, { recursive: true, force: true });
 });

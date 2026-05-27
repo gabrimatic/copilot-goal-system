@@ -15,6 +15,7 @@ import {
   formatGoalSummary,
   getOutstandingIssues,
   isGoalSystemToolName,
+  isGoalSystemControlPlaneText,
   isLikelySubagentInvocation,
   isOpenGoal,
   mergeGoal,
@@ -534,6 +535,46 @@ test("shared tool history helpers support VS Code hook payloads", () => {
   goal = appendGoalHistory(goal, "update", "Goal state updated");
   goal = appendGoalHistory(goal, "tool", "read: src/c.ts");
   assert.equal(countToolDrift(goal), 1);
+});
+
+test("goal-system control-plane reads do not count as task inspection evidence", () => {
+  assert.equal(isGoalSystemControlPlaneText("read: /Users/me/.copilot/extensions/goal-system/bin/goalctl.mjs"), true);
+
+  const ordinaryGoal = createGoalRecord(
+    {
+      objective: "Fix the sample calculator",
+      requirements: ["Make calculator tests pass"],
+      doneSoFar: ["Claimed the task is done"],
+      inspectionEvidence: ["Read ~/.copilot/extensions/goal-system/bin/goalctl.mjs"],
+      validationProof: ["npm test passed"],
+      verificationResults: ["npm test passed"],
+      requirementCoverage: ["Calculator tests cover the requested behavior"],
+      completionAudit: ["No remaining work and no blockers"],
+      remaining: [],
+      blockers: [],
+    },
+    "session-control-plane",
+    process.cwd()
+  );
+  assert.match(validateGoalCompletion(ordinaryGoal).join("\n"), /control-plane files do not count/);
+
+  const goalSystemGoal = createGoalRecord(
+    {
+      objective: "Fix the Copilot goal system command fallback",
+      requirements: ["Inspect goalctl behavior"],
+      doneSoFar: ["Verified command fallback"],
+      inspectionEvidence: ["Read ~/.copilot/extensions/goal-system/bin/goalctl.mjs"],
+      validationProof: ["npm test passed"],
+      verificationResults: ["npm test passed"],
+      requirementCoverage: ["Goalctl behavior inspected for the requested goal-system task"],
+      completionAudit: ["No remaining work and no blockers"],
+      remaining: [],
+      blockers: [],
+    },
+    "session-control-plane-allowed",
+    process.cwd()
+  );
+  assert.deepEqual(validateGoalCompletion(goalSystemGoal), []);
 });
 
 test("subagent detection keeps delegated workers outside goal ownership", () => {

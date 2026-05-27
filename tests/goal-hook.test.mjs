@@ -229,7 +229,7 @@ test("userPromptSubmitted creates a CLI draft goal on explicit goal activation",
   assert.equal(goal.completionStatus, "draft");
   assert.equal(goal.sessionId, "session-cli-activate");
   assert.equal(goal.cwd, await realpath(cwd));
-  assert.match(goal.remaining.join("\n"), /Inspect the real environment/);
+  assert.match(goal.remaining.join("\n"), /Inspect the user-requested target/);
 
   const stateDir = await stat(path.join(home, ".copilot", "session-state", "goal-system", "by-session"));
   const goalFile = await stat(path.join(home, ".copilot", "session-state", "goal-system", "by-session", "session-cli-activate.json"));

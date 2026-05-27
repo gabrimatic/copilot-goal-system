@@ -200,8 +200,8 @@ Session ID: $safe_sid
 CWD: $normalized_cwd
 Use direct goal_system_* tools when available. If direct tools are unavailable, use:
 node "$copilot_home/extensions/goal-system/bin/goalctl.mjs" status --session-id "$safe_sid" --cwd "$normalized_cwd"
-Goal state is local. Use direct goal tools when available or goalctl when they are not.
-When the prompt explicitly starts goal mode, call goal_system_open with these exact values, or run goalctl open with the same Session ID and CWD. For active goals, use goal_system_status or goalctl status before continuing or closing. Subagents must not use goal tools.
+Goal state is local. Treat goalctl as a command API, not a file to read. Do not inspect or summarize installed goal-system runtime files unless the user's task is to debug the goal system itself.
+When the prompt explicitly starts goal mode, call goal_system_open with these exact values, or run goalctl open/status/update/close with the same Session ID and CWD. For active goals, use goal_system_status or goalctl status before continuing or closing. Subagents must not use goal tools.
 EOF_EMPTY
 }
 
@@ -253,7 +253,7 @@ create_cli_draft_goal() {
       sessionId: $sessionId,
       cwd: $cwd,
       objective: $objective,
-      requirements: ["Inspect the real environment before treating any unverified detail as fact."],
+      requirements: ["Inspect the user-requested target before treating any unverified task detail as fact."],
       scope: [],
       mustNotRegress: [],
       constraints: [],
@@ -268,7 +268,7 @@ create_cli_draft_goal() {
       issueResolutions: [],
       doneSoFar: ["Draft goal record created from the explicit goal-mode prompt."],
       remaining: [
-        "Inspect the real environment and replace draft fields with verified facts.",
+        "Inspect the user-requested target workspace, runtime, or artifact and replace draft fields with verified facts.",
         "Execute the goal, record discovered issues, fix them, verify with evidence, and close only after audit."
       ],
       blockers: [],
@@ -369,7 +369,7 @@ Session ID: $safe_sid
 CWD: $normalized_cwd
 Objective: $objective
 Use direct goal_system_* tools when available. If direct tools are unavailable, use local goalctl with the exact Session ID and CWD above.
-Inspect the real environment before treating any detail as fact, then call goal_system_update with verified facts before doing substantive work.
+Treat goalctl as a command API, not as source to read. Inspect the user-requested target workspace, runtime, or artifact before treating any task detail as fact, then call goal_system_update with verified facts before doing substantive work.
 Do not answer with only an acknowledgment. Continue the real task and close only after proof.
 EOF_ACTIVATION
 )
@@ -390,7 +390,7 @@ case "$hook_event" in
     fi
     drift_count=$(count_tool_drift)
     if [[ "$drift_count" =~ ^[0-9]+$ && "$drift_count" -ge 5 ]]; then
-      drift_message="Goal-state drift guard: $drift_count tool calls have run since the last goal update. Keep using tools when needed, but checkpoint the persisted goal now: run goalctl update with verified doneSoFar, inspectionEvidence or verificationResults, and the current remaining/blockers."
+      drift_message="Goal-state drift guard: $drift_count tool calls have run since the last goal update. Keep using tools when needed, but checkpoint the persisted goal now: run goalctl update with verified doneSoFar, inspectionEvidence or verificationResults, and the current remaining/blockers. Goalctl is a command API; do not read its implementation just to update goal state."
       if [[ "${GOAL_SYSTEM_HARD_DRIFT_BLOCK:-0}" == "1" ]]; then
         jq -n --arg reason "$drift_message" '{decision: "block", reason: $reason}'
       else
@@ -399,7 +399,7 @@ case "$hook_event" in
       exit 0
     fi
     if [[ "$drift_count" =~ ^[0-9]+$ && "$drift_count" -ge 3 ]]; then
-      drift_message="Goal-state drift warning: $drift_count tool calls have run since the last goal update. Keep investigating, but checkpoint the persisted goal at the next useful point with goalctl update."
+      drift_message="Goal-state drift warning: $drift_count tool calls have run since the last goal update. Keep investigating the user-requested target, but checkpoint the persisted goal at the next useful point with goalctl update. Do not inspect goalctl implementation files just to use goal state."
       jq -n --arg additionalContext "$drift_message" '{additionalContext: $additionalContext}'
       exit 0
     fi
@@ -443,7 +443,7 @@ Remaining: $remaining
 Blockers: $blockers
 Validation/proof: $validation
 Updated at: $updated_at
-Use direct goal_system_* tools when available. If direct tools are unavailable, use local goalctl with the Session ID and CWD above. Use goal_system_status or goalctl status for authoritative state before continuing or closing. Do not mark complete without real inspection evidence, resolved issues, verification results, and completion audit.
+Use direct goal_system_* tools when available. If direct tools are unavailable, run local goalctl with the Session ID and CWD above. Goalctl is a command API, not an inspection target. Use goal_system_status or goalctl status for authoritative state before continuing or closing. Do not mark complete without real inspection evidence from the user-requested target, resolved issues, verification results, and completion audit.
 EOF_CONTEXT
 )
 
@@ -465,10 +465,10 @@ Remaining: $remaining
 Blockers: $blockers
 
 This is a hard continuation directive. Do not produce a final answer, do not ask for permission to continue, and do not bypass the guard by copying unresolved issue text into resolvedIssues.
-Use direct goal_system_* tools when available. If direct tools are unavailable, use local goalctl with the exact Session ID and CWD above.
+Use direct goal_system_* tools when available. If direct tools are unavailable, run local goalctl with the exact Session ID and CWD above. Do not read installed goal-system runtime files unless the task is to debug the goal system itself.
 Your next actions must be:
 1. Call goal_system_status, or run goalctl status, to reload authoritative state.
-2. Continue the next concrete remaining item. If remaining is empty but the goal is open, inspect the real state and update remaining or close with evidence.
+2. Continue the next concrete remaining item. If remaining is empty but the goal is open, inspect the user-requested target state and update remaining or close with evidence.
 3. Call goal_system_update, or run goalctl update, after meaningful inspection, fixes, blockers, verification, or remaining-work changes.
 4. Call goal_system_close, or run goalctl close, only when completion, blockage, or cancellation is supported by exact evidence and the completion audit passes.
 EOF_REASON

@@ -12,7 +12,7 @@ Goal mode is manual and main-session only.
 When goal mode starts:
 
 1. If the hook already created a persisted draft goal, call `goal_system_status` and continue from it. Otherwise call `goal_system_open` with the current `sessionId`, `cwd`, objective, requirements, constraints, and initial remaining work.
-2. Inspect the real workspace before treating any detail as fact.
+2. Inspect the user-requested target workspace, runtime, or artifact before treating any task detail as fact.
 3. Call `goal_system_update` after meaningful inspection, discovered issues, resolved work, blockers, verification, or remaining-work changes.
 4. Keep `remaining` as the real current queue. Replace it when the queue changes.
 5. Record newly discovered in-scope issues instead of hiding them.
@@ -24,4 +24,4 @@ Completion is allowed only when inspection evidence, resolved issues or evidence
 
 If a goal tool fails, do not pretend state was saved. Fix the missing input, report the blocker, or continue from persisted state only after `goal_system_status` confirms it.
 
-If the hook context provides a `sessionId` and `cwd`, pass those exact values to all `goal_system_*` tools. If direct goal tools are unavailable, use `node ~/.copilot/extensions/goal-system/bin/goalctl.mjs` with the same `--session-id` and `--cwd` values. Never merge unrelated same-directory sessions.
+If the hook context provides a `sessionId` and `cwd`, pass those exact values to all `goal_system_*` tools. If direct goal tools are unavailable, run `node ~/.copilot/extensions/goal-system/bin/goalctl.mjs` as a command with the same `--session-id` and `--cwd` values. Treat that path as an executable, not as source to inspect. Do not read installed goal-system runtime files unless the user's task is to debug the goal system itself. Never merge unrelated same-directory sessions.

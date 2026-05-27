@@ -101,6 +101,8 @@ Maintain a persisted Active Goal with these fields:
 
 If `goal_system_status`, `goal_system_open`, `goal_system_update`, and `goal_system_close` are available, use them. Do not keep the Active Goal only in conversation memory when persistence tools exist.
 
+Treat the goal system as a control plane. The `goal_system_*` tools and local `goalctl` command are APIs for goal state, not task files to inspect. Do not read, summarize, or reason through installed goal-system runtime files such as `goalctl.mjs`, `goal-context.sh`, or `~/.copilot/extensions/goal-system/` unless the user's task is specifically to debug or modify the goal system itself.
+
 Use the state tools as a strict state machine:
 
 - `goal_system_open`: create or replace a goal only when the prompt clearly starts or replaces a goal.
@@ -124,11 +126,11 @@ Do not let long runs drift away from persisted state. The extension tracks drift
 
 This is the point of the system. Drifting without updates breaks the contract, but tool-use deadlocks are not an acceptable enforcement mechanism.
 
-If `goal_system_update` fails, do not continue as if state was saved. Read the error, call `goal_system_status` if useful, then retry with concrete state fields. If the state tools are unavailable, say that goal persistence is unavailable and keep a concise manual checkpoint in the final response.
+If `goal_system_update` fails, do not continue as if state was saved. Read the error message, call `goal_system_status` if useful, then retry with concrete state fields. Do not open the goal-system implementation files just to understand normal tool usage. If the state tools are unavailable, use local `goalctl` as a command when the hook provided `sessionId` and `cwd`; otherwise say that goal persistence is unavailable and keep a concise manual checkpoint in the final response.
 
 ## Environment-first bootstrap
 
-Before making changes, inspect the real environment and adapt the goal to it.
+Before making changes, inspect the user-requested target environment and adapt the goal to it.
 
 Identify the real surface:
 
@@ -141,7 +143,7 @@ Identify the real surface:
 - system task
 - document/profile/form/browser task
 
-Inspect the relevant platform and tools:
+Inspect the relevant target platform and tools:
 
 - OS and shell behavior
 - current working directory
@@ -150,7 +152,7 @@ Inspect the relevant platform and tools:
 - AGENTS.md and Copilot custom instructions
 - route/screen/component structure for UI work
 - runtime/browser/simulator state when visual or interaction quality matters
-- `~/.copilot/` when the task touches Copilot setup
+- `~/.copilot/` only when the user-requested task touches Copilot setup, skills, hooks, agents, or the goal system itself
 
 Do not guess commands. Derive them from manifests, CI, docs, or existing scripts.
 
@@ -174,7 +176,7 @@ When the request asks for a goal prompt only, produce this shape with unknowns c
 Work in this loop until the goal is complete, cancelled, or truly blocked:
 
 1. Reload current goal state.
-2. Inspect the real current state.
+2. Inspect the real current state of the user-requested target.
 3. Record inspection evidence.
 4. Extract and record explicit requirements.
 5. Identify all in-scope issues.
@@ -206,7 +208,7 @@ Never use wildcard issue references such as "all", "everything", or "all issues"
 When continuing an active goal:
 
 - call `goal_system_status` first when available
-- inspect whether the environment changed since the last checkpoint
+- inspect whether the user-requested target environment changed since the last checkpoint
 - continue from persisted state, not chat memory
 - avoid repeating finished work
 - focus on remaining work, unresolved issues, and unverified requirements

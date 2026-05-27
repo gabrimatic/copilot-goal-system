@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.20
+
+- Reframes bundled goalctl guidance so agents treat the path as an executable API instead of reading implementation files.
+- Requires ordinary completion evidence to come from the user-requested target; installed goal-system control-plane reads no longer count as task inspection evidence.
+- Updates VS Code Chat hook and agent prompts to steer inspection toward the target workspace, runtime, or artifact.
+
 ## 1.1.19
 
 - Makes bundled goal audit writes deterministic so local `goalctl close` records the close event before the process exits.
