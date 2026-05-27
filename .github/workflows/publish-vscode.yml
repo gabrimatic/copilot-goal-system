@@ -90,16 +90,19 @@ jobs:
           version="$(node -p "require('./vscode-extension/package.json').version")"
           extension_id="gabrimatic.copilot-goal-system"
 
-          for attempt in $(seq 1 20); do
-            current="$(timeout 60s npm --prefix vscode-extension exec vsce -- show "$extension_id" --json \
-              | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s); console.log(j.versions?.[0]?.version || j.version || '');})")"
+          for attempt in $(seq 1 40); do
+            if current="$(timeout 60s npm --prefix vscode-extension exec vsce -- show "$extension_id" --json \
+              | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s); console.log(j.versions?.[0]?.version || j.version || '');})")"; then
+              if [ "$current" = "$version" ]; then
+                echo "Marketplace shows $extension_id v$version."
+                exit 0
+              fi
 
-            if [ "$current" = "$version" ]; then
-              echo "Marketplace shows $extension_id v$version."
-              exit 0
+              echo "Marketplace shows v${current:-unknown}; waiting for v$version ($attempt/40)."
+            else
+              echo "Marketplace version query failed; waiting for v$version ($attempt/40)."
             fi
 
-            echo "Marketplace shows v${current:-unknown}; waiting for v$version ($attempt/20)."
             sleep 15
           done
 
