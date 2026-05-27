@@ -49,19 +49,21 @@ jobs:
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: |
+          set -o pipefail
+
           version="$(node -p "require('./vscode-extension/package.json').version")"
           package_path="dist/copilot-goal-system-${version}.vsix"
           extension_id="gabrimatic.copilot-goal-system"
           delays=(30 90 180)
 
           marketplace_has_version() {
-            npm --prefix vscode-extension exec vsce -- show "$extension_id" --json \
+            timeout 60s npm --prefix vscode-extension exec vsce -- show "$extension_id" --json \
               | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s); const latest=j.versions?.[0]?.version || j.version || ''; process.exit(latest === process.argv[1] ? 0 : 1);})" "$version"
           }
 
           for attempt in 1 2 3 4; do
             echo "Publishing $extension_id v$version (attempt $attempt/4)..."
-            if npm --prefix vscode-extension exec vsce -- publish --packagePath "$package_path"; then
+            if timeout 240s npm --prefix vscode-extension exec vsce -- publish --packagePath "$package_path"; then
               echo "Publish command completed."
               break
             fi
@@ -83,11 +85,13 @@ jobs:
       - name: Verify Marketplace version
         if: ${{ github.event_name == 'push' || inputs.publish == 'true' }}
         run: |
+          set -o pipefail
+
           version="$(node -p "require('./vscode-extension/package.json').version")"
           extension_id="gabrimatic.copilot-goal-system"
 
           for attempt in $(seq 1 20); do
-            current="$(npm --prefix vscode-extension exec vsce -- show "$extension_id" --json \
+            current="$(timeout 60s npm --prefix vscode-extension exec vsce -- show "$extension_id" --json \
               | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s); console.log(j.versions?.[0]?.version || j.version || '');})")"
 
             if [ "$current" = "$version" ]; then
