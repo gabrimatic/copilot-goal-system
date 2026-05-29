@@ -80,12 +80,14 @@ The VS Code extension contributes:
 ```text
 goal_system_status
 goal_system_open
+goal_system_checkpoint
+goal_system_finish
 goal_system_update
 goal_system_close
 ```
 
 All tools require the `sessionId` and `cwd` that the hook injects into the chat context. This keeps VS Code Chat sessions isolated even when several sessions share one workspace.
-If direct tools are unavailable, run the same operation through `goalctl` with those values.
+If direct tools are unavailable, run `goalctl status`, `goalctl checkpoint`, or `goalctl finish` with those values. `goalctl update` and `goalctl close` remain available for compatibility and blocked/cancelled terminal states.
 
 ## Limits
 
@@ -113,4 +115,4 @@ Open the `GitHub Copilot Chat Hooks` output channel in VS Code. If no goal hook 
 
 ### Stop is blocked
 
-An active goal is still open. The stop hook returns a hard continuation directive: reload `goal_system_status`, continue the next concrete remaining item, update persisted state with evidence, and call `goal_system_close` only as complete, blocked, or cancelled with exact evidence.
+An active goal is still open. The stop hook returns a hard continuation directive: reload `goal_system_status`, continue the next concrete remaining item, checkpoint persisted state with evidence, and call `goal_system_finish` only when completion is proven. Use `goal_system_close` for a real blocker or explicit cancellation.

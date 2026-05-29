@@ -80,8 +80,10 @@ test("stop continuation directive forces real continuation without issue-string 
   assert.match(directive, /STOP BLOCKED/);
   assert.match(directive, /hard continuation directive/);
   assert.match(directive, /Call goal_system_status/);
-  assert.match(directive, /Call goal_system_update/);
-  assert.match(directive, /Call goal_system_close, or local goalctl close, only when/);
+  assert.match(directive, /goal_system_checkpoint/);
+  assert.match(directive, /goal_system_finish/);
+  assert.match(directive, /goalctl checkpoint/);
+  assert.match(directive, /goalctl finish/);
   assert.match(directive, /do not bypass the guard by copying unresolved issue text/);
 });
 
@@ -490,6 +492,8 @@ test("strict drift enforcement blocks non-goal tools only when recovery is avail
   assert.equal(isGoalSystemToolName("vscode.goal_system_status"), true);
   assert.equal(isGoalSystemToolName("tool-goal_system_update"), true);
   assert.equal(isGoalSystemToolName("goal_system_close"), true);
+  assert.equal(isGoalSystemToolName("goal_system_checkpoint"), true);
+  assert.equal(isGoalSystemToolName("tool-goal_system_finish"), true);
   assert.equal(isGoalSystemToolName("bash"), false);
 
   assert.equal(
@@ -513,12 +517,18 @@ test("strict drift enforcement blocks non-goal tools only when recovery is avail
     false
   );
   assert.equal(
+    shouldEnforceDrift({ hasActiveGoal: true, toolName: "goal_system_checkpoint", driftCount: 99, threshold: 5, isSubagent: false }),
+    false
+  );
+  assert.equal(
     shouldEnforceDrift({ hasActiveGoal: true, toolName: "bash", driftCount: 99, threshold: 5, isSubagent: true }),
     false
   );
 
   assert.match(buildDriftEnforcement(7, 5), /7 tool calls/);
   assert.match(buildDriftEnforcement(7, 5), /goal_system_update/);
+  assert.match(buildDriftEnforcement(7, 5), /goal_system_checkpoint/);
+  assert.match(buildDriftEnforcement(7, 5), /goalctl checkpoint/);
 });
 
 test("shared tool history helpers support VS Code hook payloads", () => {

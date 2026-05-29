@@ -171,7 +171,9 @@ class GoalSystemLanguageTool {
     const action = {
       status: "Read persisted goal state",
       open: "Open persisted goal",
+      checkpoint: "Checkpoint persisted goal",
       update: "Update persisted goal",
+      finish: "Finish persisted goal",
       close: "Close persisted goal",
     }[this.kind];
     const sessionId = String(options.input?.sessionId || "missing");
@@ -207,7 +209,7 @@ class GoalSystemLanguageTool {
     if (this.kind === "open") {
       if (record && core.isOpenGoal(record.goal) && input.replaceExisting !== true) {
         throw new Error(
-          "An active persisted goal already exists for this VS Code session/workspace. Use goal_system_update, or pass replaceExisting only when the prompt clearly replaces the current goal."
+          "An active persisted goal already exists for this VS Code session/workspace. Use goal_system_checkpoint, or pass replaceExisting only when the prompt clearly replaces the current goal."
         );
       }
       const patch = patchFromToolInput(input);
@@ -227,19 +229,56 @@ class GoalSystemLanguageTool {
       throw new Error("The persisted goal is already closed. Open a new goal only when the prompt explicitly asks for one.");
     }
 
-    if (this.kind === "update") {
+    if (this.kind === "checkpoint") {
       if (typeof input.completionStatus === "string" && !core.MUTABLE_GOAL_STATUSES.includes(input.completionStatus)) {
-        throw new Error("goal_system_update cannot mark a goal complete or cancelled. Use goal_system_close after verification.");
+        throw new Error("goal_system_checkpoint cannot mark a goal complete or cancelled. Use goal_system_finish after verification.");
       }
       const patch = patchFromToolInput(input);
       const changedFields = Object.keys(patch).filter((key) => !["historyNote", "sourcePrompt"].includes(key) && patch[key] !== undefined);
       if (!changedFields.length) {
-        throw new Error("goal_system_update requires at least one real state field such as inspectionEvidence, verificationResults, doneSoFar, remaining, or blockers.");
+        throw new Error("goal_system_checkpoint requires at least one real state field such as inspectionEvidence, verificationResults, doneSoFar, remaining, or blockers.");
+      }
+      const checkpointPatch = { ...patch };
+      if (record.goal.completionStatus === "draft" && checkpointPatch.completionStatus === undefined) {
+        checkpointPatch.completionStatus = "active";
+      }
+      const nextGoal = core.mergeGoal(record.goal, checkpointPatch, "update", checkpointPatch.historyNote || "VS Code goal checkpoint saved");
+      const persisted = await store.persistGoalRecord(sessionId, cwd, nextGoal);
+      store.auditLog("vscode_tool_checkpoint", { sid: sessionId, id: persisted.id, fields: changedFields });
+      return toolTextResult(`Checkpoint saved.\n${core.formatGoalSummary(persisted)}`);
+    }
+
+    if (this.kind === "update") {
+      if (typeof input.completionStatus === "string" && !core.MUTABLE_GOAL_STATUSES.includes(input.completionStatus)) {
+        throw new Error("goal_system_update cannot mark a goal complete or cancelled. Use goal_system_finish after verification.");
+      }
+      const patch = patchFromToolInput(input);
+      const changedFields = Object.keys(patch).filter((key) => !["historyNote", "sourcePrompt"].includes(key) && patch[key] !== undefined);
+      if (!changedFields.length) {
+        throw new Error("goal_system_update requires at least one real state field such as inspectionEvidence, verificationResults, doneSoFar, remaining, or blockers. For normal progress, use goal_system_checkpoint.");
       }
       const nextGoal = core.mergeGoal(record.goal, patch, "update", patch.historyNote || "VS Code goal state updated");
       const persisted = await store.persistGoalRecord(sessionId, cwd, nextGoal);
       store.auditLog("vscode_tool_update", { sid: sessionId, id: persisted.id, fields: changedFields });
       return toolTextResult(core.formatGoalSummary(persisted));
+    }
+
+    if (this.kind === "finish") {
+      const patch = {
+        ...patchFromToolInput(input),
+        completionStatus: "complete",
+        blockers: Array.isArray(input.blockers) ? input.blockers : [],
+        remaining: Array.isArray(input.remaining) ? input.remaining : [],
+      };
+      const nextGoal = core.mergeGoal(record.goal, patch, "close", patch.summary || "VS Code goal finished");
+      nextGoal.closedAt = new Date().toISOString();
+      const failures = core.validateGoalCompletion(nextGoal);
+      if (failures.length) {
+        throw new Error(`Refusing to finish the goal. Missing or conflicting completion evidence:\n- ${failures.join("\n- ")}`);
+      }
+      const persisted = await store.persistGoalRecord(sessionId, cwd, nextGoal);
+      store.auditLog("vscode_tool_finish", { sid: sessionId, id: persisted.id });
+      return toolTextResult(`Goal finished.\n${core.formatGoalSummary(persisted, { includeHistory: false })}`);
     }
 
     if (this.kind === "close") {
@@ -281,7 +320,9 @@ function registerGoalTools(context, output) {
   for (const [name, kind] of [
     ["goal_system_status", "status"],
     ["goal_system_open", "open"],
+    ["goal_system_checkpoint", "checkpoint"],
     ["goal_system_update", "update"],
+    ["goal_system_finish", "finish"],
     ["goal_system_close", "close"],
   ]) {
     context.subscriptions.push(vscode.lm.registerTool(name, new GoalSystemLanguageTool(context, kind)));

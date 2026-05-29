@@ -258,12 +258,13 @@ Run `goal_system_status` inside Copilot before continuing. If no state exists, s
 
 ### Drift warnings keep repeating
 
-Call `goal_system_update` with real progress, inspection evidence, verification results, remaining work, or blockers. If the goal tools are missing, the default guard should still allow recovery tool calls; rerun the installer to remove stale CLI `preToolUse` or `postToolUse` goal hooks from older installs.
+Call `goal_system_checkpoint` with real progress, inspection evidence, verification results, remaining work, or blockers. If the goal tools are missing, the default guard should still allow recovery tool calls; rerun the installer to remove stale CLI `preToolUse` or `postToolUse` goal hooks from older installs.
 
 If direct goal tools are missing, use the local command fallback from the shell:
 
 ```bash
 node ~/.copilot/extensions/goal-system/bin/goalctl.mjs status --session-id "<session-id-from-hook-context>" --cwd "<cwd-from-hook-context>"
+node ~/.copilot/extensions/goal-system/bin/goalctl.mjs checkpoint --session-id "<session-id-from-hook-context>" --cwd "<cwd-from-hook-context>" --done "saved progress" --next "next concrete work"
 ```
 
 Then rerun the installer, restart Copilot CLI, run `npm run doctor -- --target cli`, and check the `goalctl self-test` result.
@@ -278,7 +279,7 @@ Reload VS Code and select the `Goal System` custom agent. If the direct VS Code 
 
 ### A stop is blocked
 
-An open goal still exists. Follow the continuation directive: call `goal_system_status`, continue the next concrete remaining item, update persisted state with evidence, or call `goal_system_close` as complete, blocked, or cancelled with evidence.
+An open goal still exists. Follow the continuation directive: call `goal_system_status`, continue the next concrete remaining item, checkpoint persisted state with evidence, or call `goal_system_finish` when completion is proven. Use `goal_system_close` only for a real blocker or explicit cancellation.
 
 ### npm install fails
 

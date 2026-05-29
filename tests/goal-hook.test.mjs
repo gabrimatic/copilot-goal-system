@@ -111,6 +111,8 @@ test("sessionStart without an active goal injects local session context", async 
   assert.match(parsed.additionalContext, /CWD: /);
   assert.match(parsed.additionalContext, /goalctl\.mjs/);
   assert.match(parsed.additionalContext, /goal_system_open/);
+  assert.match(parsed.additionalContext, /goalctl checkpoint/);
+  assert.match(parsed.additionalContext, /goalctl finish/);
 
   await rm(home, { recursive: true, force: true });
 });
@@ -222,7 +224,8 @@ test("userPromptSubmitted creates a CLI draft goal on explicit goal activation",
   assert.match(parsed.additionalContext, /persisted draft goal was created/i);
   assert.match(parsed.additionalContext, /Session ID: session-cli-activate/);
   assert.match(parsed.additionalContext, /goalctl/);
-  assert.match(parsed.additionalContext, /goal_system_update/);
+  assert.match(parsed.additionalContext, /goal_system_checkpoint/);
+  assert.match(parsed.additionalContext, /goalctl checkpoint/);
 
   const goal = JSON.parse(await readFile(path.join(home, ".copilot", "session-state", "goal-system", "by-session", "session-cli-activate.json"), "utf8"));
   assert.equal(goal.objective, "fix the release flow end to end");
@@ -290,8 +293,10 @@ test("agentStop blocks a premature stop while an active goal is still open", asy
   assert.match(parsed.reason, /hard continuation directive/);
   assert.match(parsed.reason, /goalctl status/);
   assert.match(parsed.reason, /goal_system_status/);
-  assert.match(parsed.reason, /goal_system_update/);
-  assert.match(parsed.reason, /goal_system_close, or run goalctl close, only when/);
+  assert.match(parsed.reason, /goal_system_checkpoint/);
+  assert.match(parsed.reason, /goal_system_finish/);
+  assert.match(parsed.reason, /goalctl checkpoint/);
+  assert.match(parsed.reason, /goalctl finish/);
 
   await rm(home, { recursive: true, force: true });
 });

@@ -198,10 +198,16 @@ empty_session_context() {
 Goal System for Copilot CLI is available for this main session.
 Session ID: $safe_sid
 CWD: $normalized_cwd
-Use direct goal_system_* tools when available. If direct tools are unavailable, use:
+Use direct goal_system_* tools when available. Agent-safe path: goal_system_status -> goal_system_checkpoint -> goal_system_finish.
+If direct tools are unavailable, use these exact local commands:
+goalctl status:
 node "$copilot_home/extensions/goal-system/bin/goalctl.mjs" status --session-id "$safe_sid" --cwd "$normalized_cwd"
+goalctl checkpoint:
+node "$copilot_home/extensions/goal-system/bin/goalctl.mjs" checkpoint --session-id "$safe_sid" --cwd "$normalized_cwd" --done "<verified progress>" --next "<current remaining work>"
+goalctl finish:
+node "$copilot_home/extensions/goal-system/bin/goalctl.mjs" finish --session-id "$safe_sid" --cwd "$normalized_cwd" --done "<completed work>" --evidence "<inspection evidence>" --proof "<validation proof>" --verify "<verification result>" --audit "<completion audit>"
 Goal state is local. Treat goalctl as a command API, not a file to read. Do not inspect or summarize installed goal-system runtime files unless the user's task is to debug the goal system itself.
-When the prompt explicitly starts goal mode, call goal_system_open with these exact values, or run goalctl open/status/update/close with the same Session ID and CWD. For active goals, use goal_system_status or goalctl status before continuing or closing. Subagents must not use goal tools.
+When the prompt explicitly starts goal mode, call goal_system_open with these exact values, or run goalctl open with the same Session ID and CWD. For active goals, use status/checkpoint/finish; block or cancel only for real blockage or explicit cancellation. Subagents must not use goal tools.
 EOF_EMPTY
 }
 
@@ -269,7 +275,7 @@ create_cli_draft_goal() {
       doneSoFar: ["Draft goal record created from the explicit goal-mode prompt."],
       remaining: [
         "Inspect the user-requested target workspace, runtime, or artifact and replace draft fields with verified facts.",
-        "Execute the goal, record discovered issues, fix them, verify with evidence, and close only after audit."
+        "Execute the goal, record discovered issues, fix them, verify with evidence, and finish only after audit."
       ],
       blockers: [],
       completionAudit: [],
@@ -295,10 +301,10 @@ is_goal_state_tool() {
   local command_text
   name="$(tool_name_text)"
   command_text="$(tool_command_text)"
-  if [[ "$name" =~ (^|[-_/.])goal_system_(status|open|update|close)$ ]]; then
+  if [[ "$name" =~ (^|[-_/.])goal_system_(status|open|checkpoint|update|finish|close)$ ]]; then
     return 0
   fi
-  if [[ "$command_text" =~ (^|[[:space:]\"\'\`/])goalctl(\.mjs)?[[:space:]]+(status|open|update|close)([[:space:]]|$) ]]; then
+  if [[ "$command_text" =~ (^|[[:space:]\"\'\`/])goalctl(\.mjs)?[\"\'\`]*[[:space:]]+(status|open|checkpoint|update|finish|block|cancel|close)([[:space:]]|$) ]]; then
     return 0
   fi
   return 1
@@ -368,9 +374,13 @@ Goal ID: $(printf '%s' "$draft_json" | jq -r '.id')
 Session ID: $safe_sid
 CWD: $normalized_cwd
 Objective: $objective
-Use direct goal_system_* tools when available. If direct tools are unavailable, use local goalctl with the exact Session ID and CWD above.
-Treat goalctl as a command API, not as source to read. Inspect the user-requested target workspace, runtime, or artifact before treating any task detail as fact, then call goal_system_update with verified facts before doing substantive work.
-Do not answer with only an acknowledgment. Continue the real task and close only after proof.
+Use direct goal_system_* tools when available. Agent-safe path: goal_system_status -> goal_system_checkpoint -> goal_system_finish. If direct tools are unavailable, use local goalctl with the exact Session ID and CWD above.
+goalctl checkpoint command:
+node "$copilot_home/extensions/goal-system/bin/goalctl.mjs" checkpoint --session-id "$safe_sid" --cwd "$normalized_cwd" --done "<verified progress>" --next "<current remaining work>"
+goalctl finish command:
+node "$copilot_home/extensions/goal-system/bin/goalctl.mjs" finish --session-id "$safe_sid" --cwd "$normalized_cwd" --done "<completed work>" --evidence "<inspection evidence>" --proof "<validation proof>" --verify "<verification result>" --audit "<completion audit>"
+Treat goalctl as a command API, not as source to read. Inspect the user-requested target workspace, runtime, or artifact before treating any task detail as fact, then call goal_system_checkpoint with verified facts before doing substantive work.
+Do not answer with only an acknowledgment. Continue the real task and finish only after proof.
 EOF_ACTIVATION
 )
         jq -n --arg additionalContext "$activation_context" '{additionalContext: $additionalContext}'
@@ -390,7 +400,7 @@ case "$hook_event" in
     fi
     drift_count=$(count_tool_drift)
     if [[ "$drift_count" =~ ^[0-9]+$ && "$drift_count" -ge 5 ]]; then
-      drift_message="Goal-state drift guard: $drift_count tool calls have run since the last goal update. Keep using tools when needed, but checkpoint the persisted goal now: run goalctl update with verified doneSoFar, inspectionEvidence or verificationResults, and the current remaining/blockers. Goalctl is a command API; do not read its implementation just to update goal state."
+      drift_message="Goal-state drift guard: $drift_count tool calls have run since the last goal checkpoint. Keep using tools when needed, but checkpoint persisted state now. Prefer goal_system_checkpoint. If direct tools are unavailable, run goalctl checkpoint: node \"$copilot_home/extensions/goal-system/bin/goalctl.mjs\" checkpoint --session-id \"$safe_sid\" --cwd \"$normalized_cwd\" --done \"<verified progress>\" --next \"<current remaining work>\". Goalctl is a command API; do not read its implementation just to update goal state."
       if [[ "${GOAL_SYSTEM_HARD_DRIFT_BLOCK:-0}" == "1" ]]; then
         jq -n --arg reason "$drift_message" '{decision: "block", reason: $reason}'
       else
@@ -399,7 +409,7 @@ case "$hook_event" in
       exit 0
     fi
     if [[ "$drift_count" =~ ^[0-9]+$ && "$drift_count" -ge 3 ]]; then
-      drift_message="Goal-state drift warning: $drift_count tool calls have run since the last goal update. Keep investigating the user-requested target, but checkpoint the persisted goal at the next useful point with goalctl update. Do not inspect goalctl implementation files just to use goal state."
+      drift_message="Goal-state drift warning: $drift_count tool calls have run since the last goal checkpoint. Keep investigating the user-requested target, but checkpoint the persisted goal at the next useful point with goal_system_checkpoint or goalctl checkpoint. Do not inspect goalctl implementation files just to use goal state."
       jq -n --arg additionalContext "$drift_message" '{additionalContext: $additionalContext}'
       exit 0
     fi
@@ -443,7 +453,7 @@ Remaining: $remaining
 Blockers: $blockers
 Validation/proof: $validation
 Updated at: $updated_at
-Use direct goal_system_* tools when available. If direct tools are unavailable, run local goalctl with the Session ID and CWD above. Goalctl is a command API, not an inspection target. Use goal_system_status or goalctl status for authoritative state before continuing or closing. Do not mark complete without real inspection evidence from the user-requested target, resolved issues, verification results, and completion audit.
+Use direct goal_system_* tools when available. Agent-safe path: goal_system_status -> goal_system_checkpoint -> goal_system_finish. If direct tools are unavailable, run local goalctl status/checkpoint/finish with the Session ID and CWD above. Goalctl is a command API, not an inspection target. Do not mark complete without real inspection evidence from the user-requested target, resolved issues, verification results, and completion audit.
 EOF_CONTEXT
 )
 
@@ -465,19 +475,19 @@ Remaining: $remaining
 Blockers: $blockers
 
 This is a hard continuation directive. Do not produce a final answer, do not ask for permission to continue, and do not bypass the guard by copying unresolved issue text into resolvedIssues.
-Use direct goal_system_* tools when available. If direct tools are unavailable, run local goalctl with the exact Session ID and CWD above. Do not read installed goal-system runtime files unless the task is to debug the goal system itself.
+Use direct goal_system_* tools when available. Agent-safe path: goal_system_status -> goal_system_checkpoint -> goal_system_finish. If direct tools are unavailable, run local goalctl with the exact Session ID and CWD above. Do not read installed goal-system runtime files unless the task is to debug the goal system itself.
 Your next actions must be:
 1. Call goal_system_status, or run goalctl status, to reload authoritative state.
-2. Continue the next concrete remaining item. If remaining is empty but the goal is open, inspect the user-requested target state and update remaining or close with evidence.
-3. Call goal_system_update, or run goalctl update, after meaningful inspection, fixes, blockers, verification, or remaining-work changes.
-4. Call goal_system_close, or run goalctl close, only when completion, blockage, or cancellation is supported by exact evidence and the completion audit passes.
+2. Continue the next concrete remaining item. If remaining is empty but the goal is open, inspect the user-requested target state and checkpoint remaining work or finish with evidence.
+3. Call goal_system_checkpoint, or run goalctl checkpoint, after meaningful inspection, fixes, blockers, verification, or remaining-work changes. goal_system_update remains available for structured state edits.
+4. Call goal_system_finish, or run goalctl finish, only when completion is supported by exact evidence and the completion audit passes. Use goal_system_close or goalctl block/cancel only for real blockage or explicit cancellation.
 EOF_REASON
 )
     jq -n --arg reason "$reason" '{decision: "block", reason: $reason}'
     exit 0
     ;;
   postToolUseFailure)
-    jq -n --arg additionalContext "A tool failed while a persisted goal is active. Record the failure or blocker in goal_system_update if it affects the goal, then continue from evidence." '{additionalContext: $additionalContext}'
+    jq -n --arg additionalContext "A tool failed while a persisted goal is active. Record the failure or blocker in goal_system_checkpoint if it affects the goal, then continue from evidence." '{additionalContext: $additionalContext}'
     exit 0
     ;;
   sessionStart|userPromptSubmitted|notification)

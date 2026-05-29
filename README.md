@@ -77,14 +77,14 @@ Start a goal in either surface:
 
 ```text
 /goal
-Make this project pass its test suite. Inspect first, fix every in-scope issue, verify with real evidence, and close only after the completion audit passes.
+Make this project pass its test suite. Inspect first, fix every in-scope issue, verify with real evidence, and finish only after the completion audit passes.
 ```
 
 ## What it adds
 
 | Area | What it does |
 |------|--------------|
-| Goal tools | `goal_system_open`, `goal_system_status`, `goal_system_update`, and `goal_system_close` create, reload, update, and close persisted goals. Completion is refused without proof. |
+| Goal tools | `goal_system_open`, `goal_system_status`, `goal_system_checkpoint`, and `goal_system_finish` create, reload, checkpoint, and finish persisted goals. Compatibility `update` and `close` tools remain available for older or advanced flows. Completion is refused without proof. |
 | Lifecycle hooks | Restore goal context, write compact snapshots, block premature stop, warn on stale non-goal tool drift, and keep subagents outside goal ownership. |
 | VS Code Chat adapter | Adds the `Goal System` custom agent, VS Code hook config, direct VS Code goal tools, and local `goalctl` fallback. |
 | Goal contract | Installs the `goal` skill and instruction snippet so Copilot knows the work is execution, not a loose reminder. |
@@ -98,8 +98,8 @@ Default behavior:
 - The remaining queue is **dynamic**. Newly discovered in-scope issues are added to the goal and must be resolved before completion.
 - Discovered issues can be **renamed, merged, deduplicated, superseded, or resolved under clearer wording** only with evidence-backed `issueResolutions`.
 - Completion requires **inspection evidence, validation proof, verification results, requirement coverage, no remaining work, no blockers, resolved or evidence-covered discovered issues, and a completion audit**.
-- Tool drift is controlled without deadlocking the session. After three non-goal tool calls without `goal_system_update`, Copilot gets a warning. At five, it gets a critical recovery reminder, but the tool call is still allowed so the agent can inspect, repair, or checkpoint manually when goal tools are unavailable.
-- Stop hooks are blocked while an open goal remains active, with a hard continuation directive that tells Copilot to reload status, continue work, update persisted state, and close only with evidence.
+- Tool drift is controlled without deadlocking the session. After three non-goal tool calls without `goal_system_checkpoint` or a compatible goal update, Copilot gets a warning. At five, it gets a critical recovery reminder, but the tool call is still allowed so the agent can inspect, repair, or checkpoint manually when goal tools are unavailable.
+- Stop hooks are blocked while an open goal remains active, with a hard continuation directive that tells Copilot to reload status, continue work, checkpoint persisted state, and finish only with evidence.
 
 ## Install details
 
@@ -119,7 +119,7 @@ For Copilot CLI, the installer:
 2. Installs production dependencies inside that extension directory.
 3. Installs the goal skill at `~/.copilot/skills/goal/SKILL.md`.
 4. Installs the hook helper at `~/.copilot/hooks/goal-context.sh` and merges hook entries into `~/.copilot/settings.json`.
-5. Installs `~/.copilot/extensions/goal-system/bin/goalctl.mjs` as the local fallback for goal status, open, update, and close.
+5. Installs `~/.copilot/extensions/goal-system/bin/goalctl.mjs` as the local fallback for goal status, open, checkpoint, finish, block, cancel, update, and close.
 
 For VS Code Copilot Chat, the installer:
 

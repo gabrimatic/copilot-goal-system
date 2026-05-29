@@ -99,22 +99,24 @@ Maintain a persisted Active Goal with these fields:
 - Completion audit
 - Completion status
 
-If `goal_system_status`, `goal_system_open`, `goal_system_update`, and `goal_system_close` are available, use them. Do not keep the Active Goal only in conversation memory when persistence tools exist.
+If `goal_system_status`, `goal_system_open`, `goal_system_checkpoint`, and `goal_system_finish` are available, use them. Do not keep the Active Goal only in conversation memory when persistence tools exist.
 
 Treat the goal system as a control plane. The `goal_system_*` tools and local `goalctl` command are APIs for goal state, not task files to inspect. Do not read, summarize, or reason through installed goal-system runtime files such as `goalctl.mjs`, `goal-context.sh`, or `~/.copilot/extensions/goal-system/` unless the user's task is specifically to debug or modify the goal system itself.
 
 Use the state tools as a strict state machine:
 
 - `goal_system_open`: create or replace a goal only when the prompt clearly starts or replaces a goal.
-- `goal_system_update`: record verified facts, requirements, inspection evidence, discovered issues, issue resolutions, fixes, validation, remaining work, and blockers. Do not use empty updates, vague progress notes, or history-only updates.
 - `goal_system_status`: reload authoritative state before continuation or completion claims.
-- `goal_system_close`: close only after real evidence proves completion, blockage, or cancellation.
+- `goal_system_checkpoint`: the normal progress action. Record verified facts, requirements, inspection evidence, discovered issues, issue resolutions, fixes, validation, remaining work, and blockers. Do not use empty checkpoints, vague progress notes, or history-only checkpoints.
+- `goal_system_finish`: the normal completion action. Finish only after real evidence proves completion and the audit passes.
+- `goal_system_update`: compatibility path for structured edits when `checkpoint` is unavailable or a tool explicitly requires it.
+- `goal_system_close`: compatibility path for blocked or cancelled goals, and for older installs that do not expose `finish`.
 
-Do not mark a goal complete through `goal_system_update`.
+Do not mark a goal complete through `goal_system_update` or `goal_system_checkpoint`.
 
 ## Mandatory update cadence
 
-When a goal is active, call `goal_system_update` after every meaningful step:
+When a goal is active, call `goal_system_checkpoint` after every meaningful step:
 - After inspecting the environment (record inspectionEvidence)
 - After discovering an issue (record discoveredIssues)
 - After renaming, merging, deduplicating, or superseding a discovered issue (record issueResolutions with evidence)
@@ -122,11 +124,19 @@ When a goal is active, call `goal_system_update` after every meaningful step:
 - After running tests or checks (record verificationResults)
 - After completing a phase of work (update remaining)
 
-Do not let long runs drift away from persisted state. The extension tracks drift within each user turn, warns after 3 non-goal tool calls, and escalates after 5. The default guard remains recoverable: it warns instead of denying all tools, so missing or unavailable goal tools cannot deadlock the session. If you see a drift warning, your next useful checkpoint should be `goal_system_update` unless you first need `goal_system_status` to reload authoritative state.
+Do not let long runs drift away from persisted state. The extension tracks drift within each user turn, warns after 3 non-goal tool calls, and escalates after 5. The default guard remains recoverable: it warns instead of denying all tools, so missing or unavailable goal tools cannot deadlock the session. If you see a drift warning, your next useful action should be `goal_system_checkpoint` unless you first need `goal_system_status` to reload authoritative state.
 
 This is the point of the system. Drifting without updates breaks the contract, but tool-use deadlocks are not an acceptable enforcement mechanism.
 
-If `goal_system_update` fails, do not continue as if state was saved. Read the error message, call `goal_system_status` if useful, then retry with concrete state fields. Do not open the goal-system implementation files just to understand normal tool usage. If the state tools are unavailable, use local `goalctl` as a command when the hook provided `sessionId` and `cwd`; otherwise say that goal persistence is unavailable and keep a concise manual checkpoint in the final response.
+If `goal_system_checkpoint` fails, do not continue as if state was saved. Read the error message, call `goal_system_status` if useful, then retry with concrete state fields. Do not open the goal-system implementation files just to understand normal tool usage. If the state tools are unavailable, use local `goalctl` as a command:
+
+```bash
+goalctl status
+goalctl checkpoint --done "What changed" --evidence "What was inspected" --next "Next concrete work"
+goalctl finish --done "What was completed" --evidence "Target evidence" --proof "Completion proof" --verify "Verification result" --audit "No remaining work or blockers"
+```
+
+When the hook provides `sessionId` and `cwd`, pass those exact values with `--session-id` and `--cwd`. Without those values, `goalctl status`, `checkpoint`, and `finish` may infer the current workspace only when exactly one open same-directory goal exists; if multiple goals exist, pass the session ID explicitly.
 
 ## Environment-first bootstrap
 
@@ -217,7 +227,7 @@ Compaction must not hurt continuity. Keep persisted goal state concise but compl
 
 After compaction or resume, reload the goal state before acting.
 
-If an active goal is still open at stop time, the hook must block the turn from ending and issue a hard continuation directive. Treat that directive as the next instruction: call `goal_system_status`, continue one concrete remaining item, update persisted state with evidence, and close only after completion/blockage/cancellation is proven. Do not answer with a final summary, ask for permission to continue, or bypass the guard by copying unresolved issue text into `resolvedIssues`.
+If an active goal is still open at stop time, the hook must block the turn from ending and issue a hard continuation directive. Treat that directive as the next instruction: call `goal_system_status`, continue one concrete remaining item, save persisted state with `goal_system_checkpoint`, and call `goal_system_finish` only after completion is proven. Use `goal_system_close` only for a real blocker or explicit cancellation. Do not answer with a final summary, ask for permission to continue, or bypass the guard by copying unresolved issue text into `resolvedIssues`.
 
 If a previous goal was closed as blocked or cancelled, do not resurrect it. A terminal goal has `closedAt`; start a new goal only when the prompt asks for a new or replacement goal.
 

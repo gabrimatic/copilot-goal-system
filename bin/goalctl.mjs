@@ -24,14 +24,20 @@ const listFlagMap = new Map([
   ["--tool", "requiredTools"],
   ["--validation", "validationProof"],
   ["--verification", "verificationResults"],
+  ["--verify", "verificationResults"],
   ["--coverage", "requirementCoverage"],
   ["--inspection", "inspectionEvidence"],
+  ["--inspect", "inspectionEvidence"],
+  ["--evidence", "inspectionEvidence"],
   ["--issue", "discoveredIssues"],
   ["--resolved", "resolvedIssues"],
+  ["--fixed", "resolvedIssues"],
   ["--done", "doneSoFar"],
   ["--remaining", "remaining"],
+  ["--next", "remaining"],
   ["--blocker", "blockers"],
   ["--audit", "completionAudit"],
+  ["--proof", "validationProof"],
 ]);
 
 const scalarFlagMap = new Map([
@@ -41,6 +47,7 @@ const scalarFlagMap = new Map([
   ["--objective", "objective"],
   ["--status", "completionStatus"],
   ["--summary", "summary"],
+  ["--note", "historyNote"],
   ["--history-note", "historyNote"],
   ["--source-prompt", "sourcePrompt"],
   ["--home", "home"],
@@ -51,15 +58,22 @@ const scalarFlagMap = new Map([
 
 function usage() {
   return `Usage:
-  goalctl status --session-id <id> --cwd <path> [--json]
+  goalctl status [--session-id <id>] [--cwd <path>] [--json]
+  goalctl checkpoint [--session-id <id>] [--cwd <path>] (--done <text> | --evidence <text> | --verify <text> | --next <text> | field flags...)
+  goalctl finish [--session-id <id>] [--cwd <path>] --done <text> --evidence <text> --proof <text> --verify <text> --audit <text>
+  goalctl block [--session-id <id>] [--cwd <path>] --blocker <text> [--done <text>] [--evidence <text>]
+  goalctl cancel [--session-id <id>] [--cwd <path>] [--summary <text>]
+
+Compatibility commands:
+  goalctl update [--session-id <id>] [--cwd <path>] (--input-json <json> | --stdin | field flags...)
+  goalctl close [--session-id <id>] [--cwd <path>] --status complete|blocked|cancelled [--input-json <json>]
   goalctl open --session-id <id> --cwd <path> --objective <text> [--replace-existing]
-  goalctl update --session-id <id> --cwd <path> (--input-json <json> | --stdin | field flags...)
-  goalctl close --session-id <id> --cwd <path> --status complete|blocked|cancelled [--input-json <json>]
 
 Examples:
-  goalctl status --session-id "$SESSION_ID" --cwd "$PWD"
-  goalctl update --session-id "$SESSION_ID" --cwd "$PWD" --done "Inspected files" --remaining "Run tests"
-  printf '%s\\n' '{"verificationResults":["npm test passed"],"remaining":[]}' | goalctl update --session-id "$SESSION_ID" --cwd "$PWD" --stdin`;
+  goalctl status
+  goalctl checkpoint --done "Inspected files" --next "Run tests"
+  goalctl finish --done "Implemented fix" --evidence "Inspected target files" --proof "Completion gate checked" --verify "npm test passed" --audit "No remaining work"
+  GOAL_SYSTEM_SESSION_ID="$SESSION_ID" GOAL_SYSTEM_CWD="$PWD" goalctl checkpoint --done "Saved progress"`;
 }
 
 function readFlagValue(argv, index, flag) {
@@ -158,13 +172,50 @@ async function createStore(input) {
   return store;
 }
 
-function contextFromInput(input) {
-  const sessionId = safeSessionId(input.sessionId || process.env.GOAL_SYSTEM_SESSION_ID || "");
-  const cwd = normalizeCwd(input.cwd || process.env.GOAL_SYSTEM_CWD || process.cwd());
-  if (!sessionId || sessionId === "unknown-session") {
-    throw new Error("A session id is required. Pass --session-id from the hook context.");
+function explicitSessionId(input) {
+  const raw = input.sessionId || process.env.GOAL_SYSTEM_SESSION_ID || "";
+  if (!raw) return "";
+  const sessionId = safeSessionId(raw);
+  return sessionId && sessionId !== "unknown-session" ? sessionId : "";
+}
+
+function inputCwd(input) {
+  return normalizeCwd(input.cwd || process.env.GOAL_SYSTEM_CWD || process.cwd());
+}
+
+function openWorkspaceGoalSessions(records) {
+  const bySession = new Map();
+  for (const record of records.filter((candidate) => isOpenGoal(candidate.goal))) {
+    const sessionId = safeSessionId(record.goal.sessionId || "");
+    if (!sessionId || sessionId === "unknown-session") continue;
+    bySession.set(sessionId, record.goal.objective || "unknown until inspected");
   }
-  return { sessionId, cwd };
+  return [...bySession.entries()].map(([sessionId, objective]) => `${sessionId} (${objective})`);
+}
+
+async function contextFromInput(store, input, options = {}) {
+  const { allowMissingSession = false } = options;
+  const cwd = inputCwd(input);
+  const explicit = explicitSessionId(input);
+  if (explicit) return { sessionId: explicit, cwd, inferred: false, record: null };
+
+  const candidates = await store.loadWorkspaceGoalCandidates(cwd);
+  const { record, openCount } = store.pickSingleOpenWorkspaceGoal(candidates);
+  if (record?.goal) {
+    return { sessionId: safeSessionId(record.goal.sessionId), cwd, inferred: true, record };
+  }
+
+  if (openCount > 1) {
+    const sessions = openWorkspaceGoalSessions(candidates);
+    throw new Error(
+      `Multiple active goals exist for this working directory. Pass --session-id explicitly. Open sessions: ${sessions.join("; ")}`
+    );
+  }
+
+  if (allowMissingSession) return { sessionId: "", cwd, inferred: false, record: null };
+  throw new Error(
+    "A session id is required unless exactly one active goal exists for the current working directory. Pass --session-id from the hook context, set GOAL_SYSTEM_SESSION_ID, or run goalctl from the target workspace."
+  );
 }
 
 function patchFromInput(input) {
@@ -176,9 +227,9 @@ function patchFromInput(input) {
 }
 
 async function loadGoal(store, input) {
-  const { sessionId, cwd } = contextFromInput(input);
-  const record = await store.loadGoalRecord(sessionId, cwd);
-  return { sessionId, cwd, record };
+  const { sessionId, cwd, inferred, record: inferredRecord } = await contextFromInput(store, input);
+  const record = inferredRecord || (sessionId ? await store.loadGoalRecord(sessionId, cwd) : null);
+  return { sessionId, cwd, inferred, record };
 }
 
 function printResult(result, json) {
@@ -190,19 +241,23 @@ function printResult(result, json) {
 }
 
 async function handleStatus(store, input, options) {
-  const { record } = await loadGoal(store, input);
+  const { sessionId, cwd, record: inferredRecord } = await contextFromInput(store, input, { allowMissingSession: true });
+  const record = inferredRecord || (sessionId ? await store.loadGoalRecord(sessionId, cwd) : null);
   if (!record || !isOpenGoal(record.goal)) {
-    printResult({ ok: true, text: "No persisted active goal is stored for this session/workspace.", goal: null }, options.json);
+    printResult({ ok: true, text: "No persisted active goal is stored for this workspace.", goal: null }, options.json);
     return;
   }
   printResult({ ok: true, text: formatGoalSummary(record.goal, { includeHistory: true }), goal: record.goal }, options.json);
 }
 
 async function handleOpen(store, input, options) {
-  const { sessionId, cwd, record } = await loadGoal(store, input);
+  const sessionId = explicitSessionId(input);
+  if (!sessionId) throw new Error("open requires --session-id from the hook context.");
+  const cwd = inputCwd(input);
+  const record = await store.loadGoalRecord(sessionId, cwd);
   if (record && isOpenGoal(record.goal) && input.replaceExisting !== true) {
     throw new Error(
-      "An active persisted goal already exists for this session/workspace. Use update, or pass --replace-existing only when the prompt clearly replaces the current goal."
+      "An active persisted goal already exists for this session/workspace. Use checkpoint/update, or pass --replace-existing only when the prompt clearly replaces the current goal."
     );
   }
   const patch = patchFromInput(input);
@@ -220,33 +275,39 @@ async function handleOpen(store, input, options) {
   printResult({ ok: true, text: formatGoalSummary(persisted), goal: persisted }, options.json);
 }
 
-async function handleUpdate(store, input, options) {
+async function handleUpdate(store, input, options, label = "update") {
   const { sessionId, cwd, record } = await loadGoal(store, input);
   if (!record || !record.goal) throw new Error("No persisted goal exists yet. Use open first.");
   if (!isOpenGoal(record.goal)) throw new Error("The persisted goal is already closed. Open a new goal only for an explicit replacement.");
   if (typeof input.completionStatus === "string" && !MUTABLE_GOAL_STATUSES.includes(input.completionStatus)) {
-    throw new Error("update cannot mark a goal complete or cancelled. Use close after verification.");
+    throw new Error("checkpoint/update cannot mark a goal complete or cancelled. Use finish/close after verification.");
   }
 
   const patch = patchFromInput(input);
   const changedFields = Object.keys(patch).filter((key) => !["historyNote", "sourcePrompt"].includes(key) && patch[key] !== undefined);
   if (!changedFields.length) {
-    throw new Error("update requires at least one real state field such as done, remaining, blockers, inspection, verification, or input JSON.");
+    throw new Error("checkpoint/update requires at least one real state field such as done, next/remaining, blocker, evidence/inspection, verify/verification, or input JSON.");
   }
 
-  const nextGoal = mergeGoal(record.goal, patch, "update", patch.historyNote || "Goal state updated from goalctl");
+  const checkpointPatch = { ...patch };
+  if (label === "checkpoint" && record.goal.completionStatus === "draft" && checkpointPatch.completionStatus === undefined) {
+    checkpointPatch.completionStatus = "active";
+  }
+
+  const nextGoal = mergeGoal(record.goal, checkpointPatch, "update", checkpointPatch.historyNote || (label === "checkpoint" ? "Checkpoint saved from goalctl" : "Goal state updated from goalctl"));
   const persisted = await store.persistGoalRecord(sessionId, cwd, nextGoal);
   store.auditLog("goalctl_update", { sid: sessionId, id: persisted.id, fields: changedFields });
-  printResult({ ok: true, text: formatGoalSummary(persisted), goal: persisted }, options.json);
+  const prefix = label === "checkpoint" ? "Checkpoint saved.\n" : "";
+  printResult({ ok: true, action: label, text: `${prefix}${formatGoalSummary(persisted)}`, goal: persisted }, options.json);
 }
 
-async function handleClose(store, input, options) {
+async function handleClose(store, input, options, label = "close") {
   const { sessionId, cwd, record } = await loadGoal(store, input);
   if (!record || !record.goal) throw new Error("No persisted goal exists yet, so there is nothing to close.");
 
   const patch = patchFromInput(input);
   if (!GOAL_STATUSES.includes(patch.completionStatus) || patch.completionStatus === "draft" || patch.completionStatus === "active") {
-    throw new Error("close requires --status complete, blocked, or cancelled.");
+    throw new Error("close requires --status complete, blocked, or cancelled. Agent-friendly aliases are finish, block, and cancel.");
   }
 
   const nextGoal = mergeGoal(
@@ -270,7 +331,12 @@ async function handleClose(store, input, options) {
 
   const persisted = await store.persistGoalRecord(sessionId, cwd, nextGoal);
   store.auditLog("goalctl_close", { sid: sessionId, id: persisted.id, status: patch.completionStatus });
-  printResult({ ok: true, text: formatGoalSummary(persisted, { includeHistory: false }), goal: persisted }, options.json);
+  const prefix =
+    label === "finish" ? "Goal finished.\n" :
+      label === "block" ? "Goal blocked.\n" :
+        label === "cancel" ? "Goal cancelled.\n" :
+          "";
+  printResult({ ok: true, action: label, text: `${prefix}${formatGoalSummary(persisted, { includeHistory: false })}`, goal: persisted }, options.json);
 }
 
 async function main() {
@@ -285,11 +351,18 @@ async function main() {
   }
 
   const input = await mergeStructuredInput(rawInput, options);
+  if (command === "finish" && !input.completionStatus) input.completionStatus = "complete";
+  if (command === "block" && !input.completionStatus) input.completionStatus = "blocked";
+  if (command === "cancel" && !input.completionStatus) input.completionStatus = "cancelled";
   const store = await createStore(input);
 
   if (command === "status") await handleStatus(store, input, options);
   else if (command === "open") await handleOpen(store, input, options);
+  else if (command === "checkpoint") await handleUpdate(store, input, options, "checkpoint");
   else if (command === "update") await handleUpdate(store, input, options);
+  else if (command === "finish") await handleClose(store, input, options, "finish");
+  else if (command === "block") await handleClose(store, input, options, "block");
+  else if (command === "cancel") await handleClose(store, input, options, "cancel");
   else if (command === "close") await handleClose(store, input, options);
   else throw new Error(`Unknown command "${command}".\n${usage()}`);
 }

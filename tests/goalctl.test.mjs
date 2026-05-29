@@ -64,6 +64,118 @@ test("goalctl opens, updates, and reads persisted local state", async () => {
   await rm(home, { recursive: true, force: true });
 });
 
+test("goalctl resolves the current workspace goal and saves an agent checkpoint", async () => {
+  const home = await mkdtemp(path.join(tmpdir(), "goalctl-agent-checkpoint-"));
+  const cwd = path.join(home, "project");
+  await mkdir(cwd, { recursive: true });
+  const env = { ...process.env, HOME: home };
+
+  await runGoalctl([
+    "open",
+    "--session-id",
+    "session-agent-checkpoint",
+    "--cwd",
+    cwd,
+    "--objective",
+    "Make checkpoint easy for agents",
+  ], { env });
+
+  const checkpoint = await runGoalctl([
+    "checkpoint",
+    "--done",
+    "Inspected the user-requested project",
+    "--evidence",
+    "Read package.json and test scripts",
+    "--next",
+    "Run npm test",
+  ], { env, cwd });
+  assert.match(checkpoint.stdout, /Checkpoint saved/);
+  assert.match(checkpoint.stdout, /Inspected the user-requested project/);
+
+  const status = await runGoalctl(["status"], { env, cwd });
+  assert.match(status.stdout, /Goal ID:/);
+  assert.match(status.stdout, /Remaining: Run npm test/);
+
+  const goal = JSON.parse(await readFile(path.join(home, ".copilot", "session-state", "goal-system", "by-session", "session-agent-checkpoint.json"), "utf8"));
+  assert.equal(goal.completionStatus, "active");
+  assert.equal(goal.doneSoFar.includes("Inspected the user-requested project"), true);
+  assert.equal(goal.inspectionEvidence.includes("Read package.json and test scripts"), true);
+  assert.deepEqual(goal.remaining, ["Run npm test"]);
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("goalctl refuses implicit workspace resolution when same-directory goals are ambiguous", async () => {
+  const home = await mkdtemp(path.join(tmpdir(), "goalctl-agent-ambiguous-"));
+  const cwd = path.join(home, "project");
+  await mkdir(cwd, { recursive: true });
+  const env = { ...process.env, HOME: home };
+
+  await runGoalctl(["open", "--session-id", "session-one", "--cwd", cwd, "--objective", "First goal"], { env });
+  await runGoalctl(["open", "--session-id", "session-two", "--cwd", cwd, "--objective", "Second goal"], { env });
+
+  await assert.rejects(
+    runGoalctl(["checkpoint", "--done", "Tried implicit update"], { env, cwd }),
+    (error) => {
+      assert.match(error.stderr, /Multiple active goals exist for this working directory/);
+      assert.match(error.stderr, /session-one/);
+      assert.match(error.stderr, /session-two/);
+      return true;
+    }
+  );
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("goalctl finish closes a workspace-resolved goal with proof aliases", async () => {
+  const home = await mkdtemp(path.join(tmpdir(), "goalctl-agent-finish-"));
+  const cwd = path.join(home, "project");
+  await mkdir(cwd, { recursive: true });
+  const env = { ...process.env, HOME: home };
+
+  await runGoalctl([
+    "open",
+    "--session-id",
+    "session-agent-finish",
+    "--cwd",
+    cwd,
+    "--objective",
+    "Finish with agent-friendly aliases",
+    "--requirement",
+    "inspect",
+    "--requirement",
+    "verify",
+  ], { env });
+
+  const finish = await runGoalctl([
+    "finish",
+    "--done",
+    "Implemented the requested behavior",
+    "--evidence",
+    "Inspected the target workspace files",
+    "--proof",
+    "Completion gate required proof fields",
+    "--verify",
+    "npm run verify passed",
+    "--coverage",
+    "inspect covered by workspace inspection",
+    "--coverage",
+    "verify covered by npm run verify",
+    "--audit",
+    "No remaining work or blockers",
+  ], { env, cwd });
+
+  assert.match(finish.stdout, /Goal finished/);
+  assert.match(finish.stdout, /Status: complete/);
+
+  const goal = JSON.parse(await readFile(path.join(home, ".copilot", "session-state", "goal-system", "by-session", "session-agent-finish.json"), "utf8"));
+  assert.equal(goal.completionStatus, "complete");
+  assert.equal(Boolean(goal.closedAt), true);
+  assert.deepEqual(goal.remaining, []);
+
+  await rm(home, { recursive: true, force: true });
+});
+
 test("goalctl refuses weak completion evidence", async () => {
   const home = await mkdtemp(path.join(tmpdir(), "goalctl-close-refuse-"));
   const cwd = path.join(home, "project");

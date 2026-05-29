@@ -136,7 +136,7 @@ test("install status reports duplicate goal hooks and stale wrapped drift hooks"
   assert.deepEqual(findStaleDriftHookEvents(settings), ["preToolUse"]);
 });
 
-test("VS Code language model tools expose issue resolution input", () => {
+test("VS Code language model tools expose agent-friendly checkpoint and finish paths", () => {
   const tools = new Map(vscodePackageJson.contributes.languageModelTools.map((tool) => [tool.name, tool]));
   for (const toolName of ["goal_system_update", "goal_system_close"]) {
     const issueResolutions = tools.get(toolName)?.inputSchema?.properties?.issueResolutions;
@@ -144,6 +144,10 @@ test("VS Code language model tools expose issue resolution input", () => {
     assert.equal(issueResolutions.items?.properties?.status?.enum.includes("renamed"), true);
     assert.equal(issueResolutions.items?.properties?.evidence?.items?.type, "string");
   }
+  assert.equal(tools.get("goal_system_checkpoint")?.inputSchema?.properties?.doneSoFar?.type, "array");
+  assert.equal(tools.get("goal_system_finish")?.inputSchema?.properties?.verificationResults?.type, "array");
+  assert.match(tools.get("goal_system_checkpoint")?.modelDescription || "", /simplest/i);
+  assert.match(tools.get("goal_system_finish")?.modelDescription || "", /complete/i);
 });
 
 test("surface status cannot report adapters ready when runtime is missing", () => {

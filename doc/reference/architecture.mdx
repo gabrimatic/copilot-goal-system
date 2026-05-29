@@ -21,11 +21,11 @@ Prompt starts /goal
   -> adapter injects sessionId/cwd and any existing goal context
   -> explicit activation creates a persisted draft goal before substantive work begins
   -> skill or custom agent tells Copilot to use goal_system_* tools
-  -> SDK tool, VS Code tool, or goalctl opens or updates persisted goal state
+  -> SDK tool, VS Code tool, or goalctl opens or checkpoints persisted goal state
   -> post-tool hooks track tool history and drift
   -> pre-tool hooks inject recoverable drift warnings after the threshold
   -> stop hooks block premature turn completion
-  -> goal_system_close enforces proof before complete
+  -> goal_system_finish enforces proof before complete
 ```
 
 ## State locations
@@ -134,21 +134,21 @@ CLI and VS Code hooks inject `sessionId` and `cwd` into the session context. Dir
 
 Adapters track non-goal tool calls while a goal is open.
 
-| Count since update | Behavior |
+| Count since checkpoint | Behavior |
 |--------------------|----------|
 | 0-2 | No warning. |
 | 3-4 | Prompt-level warning. |
-| 5+ | Critical recovery reminder. The tool call is allowed by default so the session can inspect, repair, call `goal_system_update`, or keep a manual checkpoint if goal tools are unavailable. |
+| 5+ | Critical recovery reminder. The tool call is allowed by default so the session can inspect, repair, call `goal_system_checkpoint`, or keep a manual checkpoint if goal tools are unavailable. |
 
-`goal_system_status`, `goal_system_open`, `goal_system_update`, and `goal_system_close` do not count toward drift. The local `goalctl` command can update the same persisted state when direct tools are unavailable.
+`goal_system_status`, `goal_system_open`, `goal_system_checkpoint`, and `goal_system_finish` do not count toward drift. Compatibility `goal_system_update` and `goal_system_close` also do not count. The local `goalctl` command can update the same persisted state when direct tools are unavailable.
 
-Hard pre-tool denial is opt-in through `GOAL_SYSTEM_HARD_DRIFT_BLOCK=1` and should be used only in hosts where `goal_system_update` is known to be available in the same session. Default installs favor recoverability over permission deadlock.
+Hard pre-tool denial is opt-in through `GOAL_SYSTEM_HARD_DRIFT_BLOCK=1` and should be used only in hosts where `goal_system_checkpoint` is known to be available in the same session. Default installs favor recoverability over permission deadlock.
 
-Stop hooks use the same continuation contract in CLI and VS Code Chat: if the current main session still has an open goal, the hook blocks stop and tells the model to reload status, continue the next concrete remaining item, update persisted state, and close only with evidence. Alternate stop payloads such as `finishReason`, `completionReason`, and `terminationReason` are treated as stop attempts.
+Stop hooks use the same continuation contract in CLI and VS Code Chat: if the current main session still has an open goal, the hook blocks stop and tells the model to reload status, continue the next concrete remaining item, checkpoint persisted state, and finish only with evidence. Alternate stop payloads such as `finishReason`, `completionReason`, and `terminationReason` are treated as stop attempts.
 
 ## Completion gate
 
-`goal_system_close` refuses `complete` unless the goal contains:
+`goal_system_finish` refuses completion unless the goal contains:
 
 - objective
 - doneSoFar

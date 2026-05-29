@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.21
+
+- Adds direct VS Code tools `goal_system_checkpoint` and `goal_system_finish` so agents can save progress and complete goals through simple, purpose-named actions.
+- Adds bundled `goalctl checkpoint`, `finish`, `block`, and `cancel` aliases with unambiguous same-workspace recovery when direct tools are unavailable.
+- Promotes draft goals to active on the first real checkpoint so the custom agent gets a clearer state after inspecting the target.
+- Updates the bundled custom agent, hook messages, and Marketplace docs to teach status/checkpoint/finish as the normal path while keeping update/close compatibility.
+
 ## 1.1.20
 
 - Reframes bundled goalctl guidance so agents treat the path as an executable API instead of reading implementation files.

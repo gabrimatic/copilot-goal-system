@@ -15,15 +15,15 @@ Use this checklist after installing into your real `~/.copilot` profile.
 - Starting `/goal <real task>` creates a persisted goal instead of only acknowledging the skill.
 - `goal_system_status` shows the same goal ID after a new prompt in the same session.
 - A subagent receives main-session-only boundary text and cannot use goal tools.
-- After five non-goal tool calls without `goal_system_update`, the next non-goal tool gets a critical recovery reminder and is still allowed.
+- After five non-goal tool calls without `goal_system_checkpoint` or a compatible goal update, the next non-goal tool gets a critical recovery reminder and is still allowed.
 - Trying to stop with an open goal is blocked by the hook.
-- `goal_system_close` refuses `complete` when required evidence is missing.
-- `goal_system_close` accepts `complete` only after inspection, resolution, verification, coverage, no remaining work, no blockers, and completion audit are recorded.
+- `goal_system_finish` refuses completion when required evidence is missing.
+- `goal_system_finish` accepts completion only after inspection, resolution, verification, coverage, no remaining work, no blockers, and completion audit are recorded.
 
 ### VS Code Copilot Chat
 
 - The `Goal System` custom agent appears in Copilot Chat.
-- Direct VS Code tools `goal_system_status`, `goal_system_open`, `goal_system_update`, and `goal_system_close` are available to the agent.
+- Direct VS Code tools `goal_system_status`, `goal_system_open`, `goal_system_checkpoint`, and `goal_system_finish` are available to the agent.
 - The `GitHub Copilot Chat Hooks` output channel shows goal hooks running.
 - Starting `/goal <real task>` through the `Goal System` custom agent creates a persisted goal with the injected `sessionId` and `cwd`.
 - Asking to continue a single same-directory active goal in a fresh VS Code Chat session loads that persisted goal instead of starting from memory.
@@ -38,7 +38,7 @@ Run this inside Copilot after install:
 @tests/prompts/goal-system-reliability-e2e.md
 ```
 
-The fixture project has a real failing test. The live session should inspect it, run the test, fix it, rerun it, update the persisted goal, and close only after proof exists.
+The fixture project has a real failing test. The live session should inspect it, run the test, fix it, rerun it, checkpoint the persisted goal, and finish only after proof exists.
 
 ## Known limits
 

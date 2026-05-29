@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.21
+
+- Adds the agent-safe `goal_system_checkpoint` and `goal_system_finish` path so normal progress and completion use obvious verbs instead of forcing agents through lower-level update and close commands.
+- Adds `goalctl checkpoint`, `goalctl finish`, `goalctl block`, and `goalctl cancel` aliases, including workspace auto-resolution when exactly one open same-directory goal exists and explicit ambiguity errors when multiple goals exist.
+- Promotes draft goals to active on the first real checkpoint so `/goal` activation does not leave agents working against stale draft wording.
+- Updates hooks, skills, VS Code Chat agent guidance, docs, and drift warnings to show copyable status/checkpoint/finish commands and keep agents from reading installed runtime files just to use goal state.
+
 ## 1.1.20
 
 - Reframes goalctl and installed goal-system files as control-plane APIs so agents use status/update/close commands instead of reading implementation files.

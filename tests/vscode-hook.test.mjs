@@ -129,7 +129,10 @@ test("VS Code Stop blocks only the current session when an active goal is open",
   assert.match(parsed.hookSpecificOutput.reason, /Goal ID: goal-a/);
   assert.match(parsed.hookSpecificOutput.reason, /Objective: Objective A/);
   assert.match(parsed.hookSpecificOutput.reason, /hard continuation directive/);
-  assert.match(parsed.hookSpecificOutput.reason, /goal_system_update/);
+  assert.match(parsed.hookSpecificOutput.reason, /goal_system_checkpoint/);
+  assert.match(parsed.hookSpecificOutput.reason, /goal_system_finish/);
+  assert.match(parsed.hookSpecificOutput.reason, /goalctl checkpoint/);
+  assert.match(parsed.hookSpecificOutput.reason, /goalctl finish/);
   assert.doesNotMatch(parsed.hookSpecificOutput.reason, /goal-b/);
   assert.doesNotMatch(parsed.hookSpecificOutput.reason, /Objective B/);
 

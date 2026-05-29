@@ -2,7 +2,7 @@
   "name": "copilot-goal-system",
   "displayName": "Copilot Goal System",
   "description": "Install persisted goal mode for GitHub Copilot CLI and VS Code Copilot Chat.",
-  "version": "1.1.20",
+  "version": "1.1.21",
   "publisher": "gabrimatic",
   "author": {
     "name": "Soroush Yousefpour",
@@ -275,8 +275,8 @@
         "toolReferenceName": "goalUpdate",
         "icon": "$(edit)",
         "canBeReferencedInPrompt": true,
-        "userDescription": "Update persisted goal evidence, progress, blockers, or remaining work.",
-        "modelDescription": "Update the persisted active goal with verified facts, inspection evidence, discovered or resolved issues, verification results, blockers, and remaining work.",
+        "userDescription": "Compatibility tool for structured goal-state edits.",
+        "modelDescription": "Compatibility path for structured edits to the persisted active goal. Prefer goal_system_checkpoint for normal progress and goal_system_finish for completion.",
         "inputSchema": {
           "type": "object",
           "required": [
@@ -420,13 +420,293 @@
         }
       },
       {
+        "name": "goal_system_checkpoint",
+        "displayName": "Goal System Checkpoint",
+        "toolReferenceName": "goalCheckpoint",
+        "icon": "$(save)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Save verified progress, evidence, blockers, verification, and remaining work.",
+        "modelDescription": "The simplest normal progress tool. Use this whenever meaningful work has happened: inspection, discovered issues, fixes, test results, blockers, or updated remaining work. It cannot complete or cancel the goal.",
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "sessionId",
+            "cwd"
+          ],
+          "properties": {
+            "sessionId": {
+              "type": "string"
+            },
+            "cwd": {
+              "type": "string"
+            },
+            "objective": {
+              "type": "string"
+            },
+            "requirements": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "inspectionEvidence": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "discoveredIssues": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "resolvedIssues": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "issueResolutions": {
+              "type": "array",
+              "description": "Evidence-backed coverage for discovered issues whose resolution wording differs from the original issue text.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "covers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "issue": {
+                    "type": "string"
+                  },
+                  "originalIssue": {
+                    "type": "string"
+                  },
+                  "target": {
+                    "type": "string"
+                  },
+                  "targetIssue": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "resolved",
+                      "merged",
+                      "renamed",
+                      "duplicate",
+                      "superseded"
+                    ]
+                  },
+                  "resolution": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "validationProof": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "verificationResults": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "requirementCoverage": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "doneSoFar": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "remaining": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "blockers": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "completionAudit": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "completionStatus": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "active",
+                "blocked"
+              ]
+            },
+            "historyNote": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "goal_system_finish",
+        "displayName": "Goal System Finish",
+        "toolReferenceName": "goalFinish",
+        "icon": "$(pass)",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Finish the current goal as complete after proof is recorded.",
+        "modelDescription": "Complete the persisted goal after real proof exists. Use only when inspection evidence, resolved or covered issues, validation proof, verification results, requirement coverage, empty remaining work, no blockers, and completion audit are ready.",
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "sessionId",
+            "cwd"
+          ],
+          "properties": {
+            "sessionId": {
+              "type": "string"
+            },
+            "cwd": {
+              "type": "string"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "validationProof": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "verificationResults": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "requirementCoverage": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "inspectionEvidence": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "resolvedIssues": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "issueResolutions": {
+              "type": "array",
+              "description": "Evidence-backed coverage for discovered issues whose resolution wording differs from the original issue text.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "covers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "issue": {
+                    "type": "string"
+                  },
+                  "originalIssue": {
+                    "type": "string"
+                  },
+                  "target": {
+                    "type": "string"
+                  },
+                  "targetIssue": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "resolved",
+                      "merged",
+                      "renamed",
+                      "duplicate",
+                      "superseded"
+                    ]
+                  },
+                  "resolution": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "doneSoFar": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "remaining": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "blockers": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "completionAudit": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "historyNote": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
         "name": "goal_system_close",
         "displayName": "Goal System Close",
         "toolReferenceName": "goalClose",
         "icon": "$(pass)",
         "canBeReferencedInPrompt": true,
-        "userDescription": "Close the persisted goal after proof is recorded.",
-        "modelDescription": "Close the persisted goal as complete, blocked, or cancelled. Complete is refused unless evidence, verification, coverage, empty remaining work, and completion audit are recorded.",
+        "userDescription": "Compatibility tool to close complete, blocked, or cancelled goals.",
+        "modelDescription": "Compatibility close path for complete, blocked, or cancelled goals. Prefer goal_system_finish for normal completion. Complete is refused unless evidence, verification, coverage, empty remaining work, and completion audit are recorded.",
         "inputSchema": {
           "type": "object",
           "required": [

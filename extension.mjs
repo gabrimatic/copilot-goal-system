@@ -153,7 +153,7 @@ function appendActivationInstructions(prompt) {
     prompt,
     [
       "A persisted draft goal was created for this main session only.",
-      "Do not answer with only 'goal-system loaded'. Inspect the user-requested target workspace, runtime, or artifact first, then call goal_system_update with verified facts before doing substantive work.",
+      "Do not answer with only 'goal-system loaded'. Inspect the user-requested target workspace, runtime, or artifact first, then call goal_system_checkpoint with verified facts before doing substantive work.",
       "Treat goal_system_* tools and local goalctl as the goal-state API. Do not read installed goal-system runtime files unless the user's task is to debug the goal system itself.",
       "This is execution mode when the prompt asks for execution: inspect, fix, verify, and prove. Do not keep the goal only in conversation memory.",
     ].join("\n")
@@ -250,7 +250,7 @@ const session = await joinSession({
             doneSoFar: ["Draft goal record created from the explicit goal-mode prompt."],
             remaining: [
               "Inspect the user-requested target workspace, runtime, or artifact and replace draft fields with verified facts.",
-              "Execute the goal, record discovered issues, fix them, verify with evidence, and close only after audit.",
+              "Execute the goal, record discovered issues, fix them, verify with evidence, and finish only after audit.",
             ],
             completionStatus: "draft",
           },
@@ -298,7 +298,7 @@ const session = await joinSession({
           driftEnforcement = `\nCRITICAL DRIFT: ${buildDriftEnforcement(drift, DRIFT_BLOCK_THRESHOLD)}`;
           store.auditLog("drift_critical", { sid, drift });
         } else if (drift >= DRIFT_WARN_THRESHOLD) {
-          driftEnforcement = `\nDRIFT WARNING: ${drift} tool calls without a goal_system_update. Call goal_system_update with verified progress before continuing other work.`;
+          driftEnforcement = `\nDRIFT WARNING: ${drift} tool calls without a goal_system_checkpoint. Call goal_system_checkpoint with verified progress before continuing other work.`;
           store.auditLog("drift_warn", { sid, drift });
         }
 
@@ -377,7 +377,7 @@ const session = await joinSession({
 
       if (drift >= DRIFT_WARN_THRESHOLD) {
         return {
-          additionalContext: `Goal-state drift warning: ${drift} tool calls have run since the last goal_system_update. Update the persisted goal at the next useful checkpoint.`,
+          additionalContext: `Goal-state drift warning: ${drift} tool calls have run since the last goal_system_checkpoint. Save persisted progress at the next useful checkpoint.`,
         };
       }
 
@@ -469,7 +469,7 @@ const session = await joinSession({
           store.auditLog("open_blocked", { sid: safeSessionId(invocation.sessionId), reason: "existing_active" });
           return {
             textResultForLlm:
-              "An active persisted goal already exists for this main session/workspace. Use goal_system_update to continue it, or call goal_system_open with replaceExisting: true only when the prompt clearly replaces the current goal.",
+              "An active persisted goal already exists for this main session/workspace. Use goal_system_checkpoint to continue it, or call goal_system_open with replaceExisting: true only when the prompt clearly replaces the current goal.",
             resultType: "failure",
           };
         }
@@ -490,8 +490,62 @@ const session = await joinSession({
     },
 
     {
+      name: "goal_system_checkpoint",
+      description: "Agent-friendly progress checkpoint. Save verified progress, evidence, blockers, verification, and remaining work.",
+      skipPermission: true,
+      parameters: {
+        type: "object",
+        properties: {
+          ...goalToolProperties,
+          completionStatus: { type: "string", enum: MUTABLE_GOAL_STATUSES },
+        },
+      },
+      handler: async (args, invocation) => {
+        const subagentFailure = assertMainSessionTool(invocation);
+        if (subagentFailure) return subagentFailure;
+        await ensureFlushed(invocation.sessionId);
+        const sessionCwd = getSessionCwd(invocation.sessionId, invocationCwd(invocation));
+        const loadedGoal = await store.loadGoalRecord(invocation.sessionId, sessionCwd);
+        if (!loadedGoal || !loadedGoal.goal) {
+          return { textResultForLlm: "No persisted goal exists yet. Use goal_system_open first.", resultType: "failure" };
+        }
+        if (!isOpenGoal(loadedGoal.goal)) {
+          return {
+            textResultForLlm:
+              "The persisted goal is already closed. Start a new goal with goal_system_open when the prompt explicitly asks for a replacement or new goal.",
+            resultType: "failure",
+          };
+        }
+        if (typeof args.completionStatus === "string" && !MUTABLE_GOAL_STATUSES.includes(args.completionStatus)) {
+          store.auditLog("checkpoint_blocked", { sid: safeSessionId(invocation.sessionId), reason: "invalid_status", status: args.completionStatus });
+          return {
+            textResultForLlm: "goal_system_checkpoint cannot mark a goal complete or cancelled. Use goal_system_finish after the goal is actually verified.",
+            resultType: "failure",
+          };
+        }
+        const changedFields = Object.keys(args).filter((k) => k !== "historyNote" && k !== "sourcePrompt" && args[k] !== undefined);
+        if (!changedFields.length) {
+          return {
+            textResultForLlm:
+              "goal_system_checkpoint requires at least one real state field such as inspectionEvidence, discoveredIssues, resolvedIssues, verificationResults, doneSoFar, remaining, blockers, or requirementCoverage.",
+            resultType: "failure",
+          };
+        }
+        const checkpointPatch = { ...args };
+        if (loadedGoal.goal.completionStatus === "draft" && checkpointPatch.completionStatus === undefined) {
+          checkpointPatch.completionStatus = "active";
+        }
+        const nextGoal = mergeGoal(loadedGoal.goal, checkpointPatch, "update", checkpointPatch.historyNote || "Checkpoint saved");
+        const persisted = await persistAndTrack(invocation, sessionCwd, nextGoal);
+        driftCountBySession.set(safeSessionId(invocation.sessionId), 0);
+        store.auditLog("goal_checkpoint", { sid: safeSessionId(invocation.sessionId), id: persisted.id, fields: changedFields });
+        return `Checkpoint saved.\n${formatGoalSummary(persisted)}`;
+      },
+    },
+
+    {
       name: "goal_system_update",
-      description: "Update the persisted active goal with verified facts, progress, blockers, issues, or proof.",
+      description: "Compatibility tool for structured goal-state edits. Prefer goal_system_checkpoint for normal progress.",
       skipPermission: true,
       parameters: {
         type: "object",
@@ -519,7 +573,7 @@ const session = await joinSession({
         if (typeof args.completionStatus === "string" && !MUTABLE_GOAL_STATUSES.includes(args.completionStatus)) {
           store.auditLog("update_blocked", { sid: safeSessionId(invocation.sessionId), reason: "invalid_status", status: args.completionStatus });
           return {
-            textResultForLlm: "goal_system_update cannot mark a goal complete or cancelled. Use goal_system_close after the goal is actually verified.",
+            textResultForLlm: "goal_system_update cannot mark a goal complete or cancelled. Use goal_system_finish after the goal is actually verified.",
             resultType: "failure",
           };
         }
@@ -527,7 +581,7 @@ const session = await joinSession({
         if (!changedFields.length) {
           return {
             textResultForLlm:
-              "goal_system_update requires at least one real state field such as inspectionEvidence, discoveredIssues, resolvedIssues, verificationResults, doneSoFar, remaining, blockers, or requirementCoverage. A history note alone is not enough.",
+              "goal_system_update requires at least one real state field such as inspectionEvidence, discoveredIssues, resolvedIssues, verificationResults, doneSoFar, remaining, blockers, or requirementCoverage. A history note alone is not enough. For normal progress, use goal_system_checkpoint.",
             resultType: "failure",
           };
         }
@@ -540,8 +594,61 @@ const session = await joinSession({
     },
 
     {
+      name: "goal_system_finish",
+      description: "Agent-friendly completion action. Close the current goal as complete after proof fields are recorded.",
+      skipPermission: true,
+      parameters: {
+        type: "object",
+        properties: {
+          summary: { type: "string" },
+          ...goalToolProperties,
+        },
+      },
+      handler: async (args, invocation) => {
+        const subagentFailure = assertMainSessionTool(invocation);
+        if (subagentFailure) return subagentFailure;
+        await ensureFlushed(invocation.sessionId);
+        const sessionCwd = getSessionCwd(invocation.sessionId, invocationCwd(invocation));
+        const loadedGoal = await store.loadGoalRecord(invocation.sessionId, sessionCwd);
+        if (!loadedGoal || !loadedGoal.goal) {
+          return { textResultForLlm: "No persisted goal exists yet, so there is nothing to finish.", resultType: "failure" };
+        }
+        if (!isOpenGoal(loadedGoal.goal)) {
+          return {
+            textResultForLlm:
+              "The persisted goal is already closed. Start a new goal with goal_system_open when the prompt explicitly asks for a replacement or new goal.",
+            resultType: "failure",
+          };
+        }
+
+        const patch = {
+          ...args,
+          completionStatus: "complete",
+          blockers: Array.isArray(args.blockers) ? args.blockers : [],
+          remaining: Array.isArray(args.remaining) ? args.remaining : [],
+        };
+        const nextGoal = mergeGoal(loadedGoal.goal, patch, "close", args.summary || "Goal finished");
+        nextGoal.closedAt = nowIso();
+
+        const failures = validateGoalCompletion(nextGoal);
+        if (failures.length) {
+          store.auditLog("finish_refused", { sid: safeSessionId(invocation.sessionId), id: loadedGoal.goal.id, reasons: failures });
+          return {
+            textResultForLlm: `Refusing to finish the goal. Missing or conflicting completion evidence:\n- ${failures.join("\n- ")}`,
+            resultType: "failure",
+          };
+        }
+
+        const persisted = await persistAndTrack(invocation, sessionCwd, nextGoal);
+        driftCountBySession.delete(safeSessionId(invocation.sessionId));
+        store.auditLog("goal_finish", { sid: safeSessionId(invocation.sessionId), id: persisted.id });
+        return `Goal finished.\n${formatGoalSummary(persisted, { includeHistory: false })}`;
+      },
+    },
+
+    {
       name: "goal_system_close",
-      description: "Close the persisted goal as complete, blocked, or cancelled after real evidence is recorded.",
+      description: "Compatibility tool to close complete, blocked, or cancelled goals. Prefer goal_system_finish for normal completion.",
       skipPermission: true,
       parameters: {
         type: "object",
