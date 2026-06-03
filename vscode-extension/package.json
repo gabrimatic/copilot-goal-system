@@ -895,7 +895,7 @@
     "publish": "vsce publish"
   },
   "devDependencies": {
-    "@vscode/vsce": "^3.9.1"
+    "@vscode/vsce": "^3.9.2"
   },
   "dependencies": {
     "jsonc-parser": "^3.3.1"
