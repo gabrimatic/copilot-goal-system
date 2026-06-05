@@ -175,6 +175,7 @@ test("surface status cannot report adapters ready when runtime is missing", () =
     runtime: "Missing",
     cli: "Needs attention",
     vscodeChat: "Needs attention",
+    mcp: "Not installed",
     recommended: false,
   });
 });

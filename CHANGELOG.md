@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.22
+
+- Adds a first-class MCP stdio server at `adapters/mcp/server.mjs` with status, open, checkpoint, finish, update, close, block, and cancel goal tools backed by the shared goal core.
+- Adds `./install.sh --target mcp`, includes MCP in `--target all`, and writes `mcpServers.goalSystem` to `~/.copilot/mcp-config.json` while preserving existing MCP servers and recovering malformed config files.
+- Extends doctor, VS Code status, docs, and tests with MCP server self-tests, raw stdio E2E coverage, install config checks, and validation-error handling.
+
 ## 1.1.21
 
 - Adds the agent-safe `goal_system_checkpoint` and `goal_system_finish` path so normal progress and completion use obvious verbs instead of forcing agents through lower-level update and close commands.

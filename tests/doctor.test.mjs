@@ -54,6 +54,8 @@ test("doctor reports a healthy all-target local install", async () => {
   assert.equal(report.target, "all");
   assert.equal(report.checks.find((item) => item.label === "Local goalctl command").ok, true);
   assert.equal(report.checks.find((item) => item.label === "goalctl self-test").ok, true);
+  assert.equal(report.checks.find((item) => item.label === "MCP server config").ok, true);
+  assert.equal(report.checks.find((item) => item.label === "MCP server self-test").ok, true);
   assert.equal(report.checks.find((item) => item.label === "All CLI lifecycle hooks").ok, true);
   assert.equal(report.checks.find((item) => item.label === "No stale wrapped drift hooks").ok, true);
 
@@ -64,6 +66,35 @@ test("doctor reports a healthy all-target local install", async () => {
     maxBuffer: 1024 * 1024 * 4,
   });
   assert.equal(JSON.parse(installedDoctorResult.stdout).ok, true);
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("doctor can scope health checks to MCP-only installs", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "goal-doctor-mcp-"));
+  const fakeBin = path.join(home, "bin");
+  await mkdir(fakeBin, { recursive: true });
+
+  const env = isolatedEnv(home, fakeBin);
+  await execFileAsync(process.execPath, [installer, "--target", "mcp"], {
+    cwd: root,
+    env,
+    maxBuffer: 1024 * 1024 * 8,
+  });
+
+  const { stdout } = await execFileAsync(process.execPath, [doctor, "--home", home, "--target", "mcp", "--json"], {
+    cwd: root,
+    env,
+    maxBuffer: 1024 * 1024 * 4,
+  });
+
+  const report = JSON.parse(stdout);
+  assert.equal(report.ok, true);
+  assert.equal(report.target, "mcp");
+  assert.equal(report.checks.find((item) => item.label === "MCP server config").ok, true);
+  assert.equal(report.checks.find((item) => item.label === "MCP server self-test").ok, true);
+  assert.equal(report.checks.some((item) => item.label === "Copilot CLI command"), false);
+  assert.equal(report.checks.some((item) => item.label === "VS Code Chat custom agent"), false);
 
   await rm(home, { recursive: true, force: true });
 });

@@ -1,11 +1,11 @@
 ---
 title: "Copilot Goal System"
-description: "Persisted goal mode for GitHub Copilot CLI and VS Code Copilot Chat."
+description: "Persisted goal mode for GitHub Copilot CLI, MCP, and VS Code Copilot Chat."
 ---
 
 Copilot Goal System keeps long-running Copilot work tied to one persisted Active Goal.
 
-It gives GitHub Copilot CLI and VS Code Copilot Chat local goal state, lifecycle hooks, subagent boundaries, drift warnings, and completion gates that require proof before a goal can close. Use it when a task needs to survive compaction, parallel sessions, subagents, and the moment where inspection turns one issue into ten.
+It gives GitHub Copilot CLI, MCP, and VS Code Copilot Chat local goal state, lifecycle hooks, subagent boundaries, drift warnings, and completion gates that require proof before a goal can close. Use it when a task needs to survive compaction, parallel sessions, subagents, and the moment where inspection turns one issue into ten.
 
 ## Start here
 
@@ -20,7 +20,7 @@ It gives GitHub Copilot CLI and VS Code Copilot Chat local goal state, lifecycle
 curl -fsSL https://gabrimatic.github.io/copilot-goal-system/install.sh | bash
 ```
 
-For both adapters:
+For CLI, MCP, and VS Code Chat support:
 
 ```bash
 curl -fsSL https://gabrimatic.github.io/copilot-goal-system/install.sh | bash -s -- --target all
@@ -31,6 +31,7 @@ curl -fsSL https://gabrimatic.github.io/copilot-goal-system/install.sh | bash -s
 | Area | What it does |
 |------|--------------|
 | Goal tools | `goal_system_open`, `goal_system_status`, `goal_system_checkpoint`, and `goal_system_finish` create, reload, checkpoint, and finish persisted goals. Compatibility `update` and `close` tools remain available for older or advanced flows. Completion is refused without proof. |
+| MCP stdio server | Adds `goalSystem` to Copilot CLI MCP config and exposes status, open, checkpoint, finish, update, close, block, and cancel tools over stdio. |
 | Lifecycle hooks | Restore goal context, write compact snapshots, block premature stop, warn on stale non-goal tool drift, and keep subagents outside goal ownership. |
 | VS Code Chat adapter | Adds the `Goal System` custom agent, VS Code hook config, direct VS Code goal tools, and local `goalctl` fallback. |
 | Goal contract | Installs the `goal` skill and instruction snippet so Copilot knows the work is execution, not a loose reminder. |

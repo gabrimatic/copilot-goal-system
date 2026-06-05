@@ -19,6 +19,7 @@ The Marketplace install button installs the VS Code wrapper. The command above i
 
 - Copilot CLI stable adapter
 - VS Code Copilot Chat preview adapter
+- Copilot CLI MCP stdio server
 - local goal tools
 - lifecycle hooks
 - the Goal System custom agent
@@ -33,7 +34,7 @@ Install directly from the published docs site:
 curl -fsSL https://gabrimatic.github.io/copilot-goal-system/install.sh | bash
 ```
 
-Install both adapters:
+Install CLI, VS Code Chat, and MCP support:
 
 ```bash
 curl -fsSL https://gabrimatic.github.io/copilot-goal-system/install.sh | bash -s -- --target all
@@ -54,6 +55,12 @@ For CLI mode, restart Copilot CLI, then run:
 ```text
 /skills reload
 /env
+```
+
+For MCP mode, run:
+
+```text
+/mcp show goalSystem
 ```
 
 For VS Code Chat, reload VS Code, then select the `Goal System` custom agent in Copilot Chat.

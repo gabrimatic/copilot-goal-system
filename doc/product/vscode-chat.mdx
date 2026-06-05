@@ -30,7 +30,7 @@ From a cloned repository, run:
 ./install.sh --target vscode-chat
 ```
 
-Install both adapters:
+Install CLI, MCP, and VS Code Chat support:
 
 ```bash
 ./install.sh --target all
@@ -51,7 +51,7 @@ Updating local files replaces the installed runtime snapshot, so stale files fro
 | `~/.copilot/hooks/goal-system-vscode.json` | VS Code hook config with PascalCase lifecycle events. |
 | `~/.copilot/session-state/goal-system/` | Shared persisted goal state. |
 
-The installer writes backups before changing hook config or custom agent files. Older `goalSystem` server entries from previous releases are removed when the old config file is parseable; current installs do not create a server.
+The installer writes backups before changing hook config, MCP config, or custom agent files. Current recommended installs add the Copilot CLI `goalSystem` MCP server entry and keep `goalctl` as the local recovery fallback.
 
 ## Enforcement
 

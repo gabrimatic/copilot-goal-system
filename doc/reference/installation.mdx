@@ -12,6 +12,7 @@ Install Copilot Goal System into your local GitHub Copilot profiles. The install
 | Node.js | `>= 20` | Required by the Copilot SDK package. |
 | npm | `>= 10` | Used by the installer to install production dependencies. |
 | GitHub Copilot CLI | current | Required for CLI strict mode. Restart it after install. |
+| Copilot CLI MCP | current | Required for MCP tool access through `~/.copilot/mcp-config.json`. |
 | VS Code Copilot Chat | current | Required for VS Code Chat preview mode. |
 | macOS or Linux shell | bash-compatible | The hook helper is a shell script. |
 | jq | current | Required by the CLI hook helper to parse Copilot hook payloads. |
@@ -32,7 +33,7 @@ Then run this Command Palette command:
 Copilot Goal System: Install into Copilot CLI
 ```
 
-For both adapters, run:
+For CLI, MCP, and VS Code Chat support, run:
 
 ```text
 Copilot Goal System: Install Recommended Setup
@@ -58,10 +59,16 @@ cd copilot-goal-system
 ./install.sh
 ```
 
-Install both adapters:
+Install CLI, MCP, and VS Code Chat support:
 
 ```bash
 ./install.sh --target all
+```
+
+Install only the MCP server config:
+
+```bash
+./install.sh --target mcp
 ```
 
 If your Copilot CLI profile is not `~/.copilot`, set `COPILOT_HOME` to the full profile directory before running the installer.
@@ -87,17 +94,20 @@ Confirm the `goal` skill appears and the extension tools are visible. After inst
 |------|---------|
 | `~/.copilot/extensions/goal-system/` | Extension package, tests, docs, hook config, and dependencies. |
 | `~/.copilot/extensions/goal-system/bin/goalctl.mjs` | Local command fallback for goal status, open, update, and close. |
+| `~/.copilot/extensions/goal-system/adapters/mcp/server.mjs` | Local MCP stdio server exposing goal tools. |
 | `~/.copilot/skills/goal/SKILL.md` | Goal-mode skill used by Copilot. |
 | `~/.copilot/hooks/goal-context.sh` | CLI lifecycle hook helper. |
 | `~/.copilot/hooks/goal-system-vscode.json` | VS Code Chat lifecycle hook config. |
 | `~/.copilot/agents/goal-system.agent.md` | VS Code Chat custom agent. |
 | `~/.copilot/settings.json` | Hook entries are merged into existing settings. |
+| `~/.copilot/mcp-config.json` | `mcpServers.goalSystem` is added or updated for Copilot CLI MCP. |
 | `~/.copilot/copilot-instructions.md` | A short goal-system reminder is appended once. |
 
 The installer preserves existing settings. It appends missing goal hooks, leaves unrelated hooks alone, and recognizes existing goal hooks written with `~`, `$HOME`, `$COPILOT_HOME`, absolute paths, or wrapper commands. If a composite user hook already runs `goal-context.sh`, the installer keeps that hook and does not add a duplicate direct goal hook. Empty JSON or JSONC config files are initialized as empty objects. Malformed JSON/JSONC or parseable non-object target config files are preserved as `*.invalid-backup-*`, replaced with a clean JSON object, and then updated so reinstall and update flows can recover from broken local config.
 
 Copilot CLI `settings.json` is handled as a JSONC-compatible config file. Comments and trailing commas are accepted, and comments outside the exact updated subtree are preserved while the installer updates `hooks`.
-Current installs use local hooks, direct tools, and `goalctl`; they do not create server config.
+Copilot CLI `mcp-config.json` is also handled as JSONC-compatible config. Existing MCP servers are preserved while `mcpServers.goalSystem` is added or replaced with the local stdio command.
+Current recommended installs use local hooks, direct tools, the MCP stdio server, and `goalctl`. MCP is an additional goal API surface; `goalctl` remains the recovery fallback when a host hides or disables tools.
 Config backups keep the original file permissions, and newly created config files default to owner-only permissions.
 
 Runtime updates are prepared in a temporary directory first. The installer copies the new package, runs `npm ci --omit=dev --ignore-scripts`, and marks runtime entrypoints executable before replacing `~/.copilot/extensions/goal-system/`. If dependency installation fails, the previous runtime remains in place and config files are not changed.
@@ -166,11 +176,18 @@ Run a local host diagnostic:
 npm run doctor -- --target cli
 ```
 
-For both adapters:
+For all local surfaces:
 
 ```bash
 ./install.sh --target all
 npm run doctor -- --target all
+```
+
+For MCP only:
+
+```bash
+./install.sh --target mcp
+npm run doctor -- --target mcp
 ```
 
 Restart Copilot CLI after updating.
@@ -182,6 +199,13 @@ After restarting Copilot CLI, run:
 ```
 
 Confirm the goal skill is loaded and the direct goal tools are visible.
+For MCP, run:
+
+```text
+/mcp show goalSystem
+```
+
+Confirm Copilot CLI can start the local server and list the goal tools.
 
 Updates replace the installed runtime snapshot instead of overlaying files, so files removed from newer releases do not remain active in `~/.copilot/extensions/goal-system/`.
 Updates also clean up duplicate direct goal hook entries from older installs while preserving composite hooks that include user-managed context helpers.
@@ -231,7 +255,7 @@ Also remove the marked snippet in `~/.copilot/copilot-instructions.md`:
 <!-- copilot-goal-system snippet end -->
 ```
 
-Current installers do not write any server config. Uninstalling only needs to remove the installed goal files, hook entries, and instruction snippet above.
+Then edit `~/.copilot/mcp-config.json` and remove `mcpServers.goalSystem` if you installed MCP support.
 
 ## Troubleshooting
 
@@ -268,6 +292,23 @@ node ~/.copilot/extensions/goal-system/bin/goalctl.mjs checkpoint --session-id "
 ```
 
 Then rerun the installer, restart Copilot CLI, run `npm run doctor -- --target cli`, and check the `goalctl self-test` result.
+
+### MCP tools do not appear
+
+Run:
+
+```text
+/mcp show goalSystem
+```
+
+If the server is missing or disabled, rerun:
+
+```bash
+./install.sh --target mcp
+npm run doctor -- --target mcp
+```
+
+The MCP config should contain `mcpServers.goalSystem` with `type: "local"`, command `node`, and args pointing to `~/.copilot/extensions/goal-system/adapters/mcp/server.mjs`.
 
 ### Status reports duplicate CLI goal hooks
 

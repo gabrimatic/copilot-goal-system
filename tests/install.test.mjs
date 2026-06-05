@@ -139,6 +139,89 @@ test("installer accepts JSONC settings without stripping comments", async () => 
   await rm(home, { recursive: true, force: true });
 });
 
+test("installer writes a Copilot CLI MCP server config for the MCP target", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-mcp-"));
+  const copilotDir = path.join(home, ".copilot");
+
+  await execFileAsync(process.execPath, [installer, "--target", "mcp"], {
+    cwd: root,
+    env: { ...process.env, HOME: home },
+    maxBuffer: 1024 * 1024 * 8,
+  });
+
+  const mcpConfigPath = path.join(copilotDir, "mcp-config.json");
+  const mcpConfig = JSON.parse(await readFile(mcpConfigPath, "utf8"));
+  assert.deepEqual(mcpConfig.mcpServers.goalSystem, {
+    type: "local",
+    command: "node",
+    args: [path.join(copilotDir, "extensions", "goal-system", "adapters", "mcp", "server.mjs")],
+    env: {
+      COPILOT_HOME: copilotDir,
+    },
+    tools: ["*"],
+  });
+  assert.equal((await stat(mcpConfigPath)).mode & 0o777, 0o600);
+  assert.equal((await stat(path.join(copilotDir, "extensions", "goal-system", "adapters", "mcp", "server.mjs"))).mode & 0o777, 0o755);
+  await assert.rejects(readFile(path.join(copilotDir, "settings.json"), "utf8"), /ENOENT/);
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("installer preserves MCP config entries and repairs malformed MCP config", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-mcp-repair-"));
+  const copilotDir = path.join(home, ".copilot");
+  const mcpConfigPath = path.join(copilotDir, "mcp-config.json");
+  await execFileAsync("mkdir", ["-p", copilotDir]);
+  await writeFile(mcpConfigPath, "{bad json");
+  await chmod(mcpConfigPath, 0o600);
+
+  const { stderr } = await execFileAsync(process.execPath, [installer, "--target", "mcp"], {
+    cwd: root,
+    env: { ...process.env, HOME: home },
+    maxBuffer: 1024 * 1024 * 8,
+  });
+
+  assert.match(stderr, /could not be used as Copilot CLI MCP config/);
+  const backups = await execFileAsync("find", [copilotDir, "-name", "mcp-config.json.invalid-backup-*"], { encoding: "utf8" });
+  const backupPaths = backups.stdout.trim().split("\n").filter(Boolean);
+  assert.equal(backupPaths.length, 1);
+  assert.equal(await readFile(backupPaths[0], "utf8"), "{bad json");
+
+  const repaired = JSON.parse(await readFile(mcpConfigPath, "utf8"));
+  assert.equal(repaired.mcpServers.goalSystem.command, "node");
+  assert.equal(repaired.mcpServers.goalSystem.tools[0], "*");
+  assert.equal((await stat(mcpConfigPath)).mode & 0o777, 0o600);
+
+  await writeFile(
+    mcpConfigPath,
+    JSON.stringify(
+      {
+        mcpServers: {
+          existingServer: {
+            type: "http",
+            url: "https://example.test/mcp",
+            tools: ["*"],
+          },
+        },
+      },
+      null,
+      2
+    )
+  );
+
+  await execFileAsync(process.execPath, [installer, "--target", "all"], {
+    cwd: root,
+    env: { ...process.env, HOME: home },
+    maxBuffer: 1024 * 1024 * 12,
+  });
+
+  const merged = JSON.parse(await readFile(mcpConfigPath, "utf8"));
+  assert.equal(merged.mcpServers.existingServer.url, "https://example.test/mcp");
+  assert.equal(merged.mcpServers.goalSystem.args[0], path.join(copilotDir, "extensions", "goal-system", "adapters", "mcp", "server.mjs"));
+
+  await rm(home, { recursive: true, force: true });
+});
+
 test("installer normalizes CLI tool-use hooks while preserving user hooks", async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-stale-drift-hook-"));
   const copilotDir = path.join(home, ".copilot");

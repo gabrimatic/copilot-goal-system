@@ -19,10 +19,12 @@ const skillDir = path.join(copilotRoot, "skills", "goal");
 const hookDir = path.join(copilotRoot, "hooks");
 const agentDir = path.join(copilotRoot, "agents");
 const settingsPath = path.join(copilotRoot, "settings.json");
+const mcpConfigPath = path.join(copilotRoot, "mcp-config.json");
 const instructionsPath = path.join(copilotRoot, "copilot-instructions.md");
 const vscodeHookConfigPath = path.join(hookDir, "goal-system-vscode.json");
 const vscodeAgentPath = path.join(agentDir, "goal-system.agent.md");
 const goalctlPath = path.join(extensionDir, "bin", "goalctl.mjs");
+const mcpServerPath = path.join(extensionDir, "adapters", "mcp", "server.mjs");
 const markerStart = "<!-- copilot-goal-system snippet start -->";
 const markerEnd = "<!-- copilot-goal-system snippet end -->";
 
@@ -78,9 +80,9 @@ function parseArgs(argv) {
 const options = parseArgs(process.argv.slice(2));
 
 function selectedTargets(target) {
-  if (target === "all") return new Set(["cli", "vscode-chat"]);
-  if (target === "cli" || target === "vscode-chat") return new Set([target]);
-  throw new Error(`Unknown install target "${target}". Use cli, vscode-chat, or all.`);
+  if (target === "all") return new Set(["cli", "vscode-chat", "mcp"]);
+  if (target === "cli" || target === "vscode-chat" || target === "mcp") return new Set([target]);
+  throw new Error(`Unknown install target "${target}". Use cli, vscode-chat, mcp, or all.`);
 }
 
 async function readJsonDocumentIfExists(filePath) {
@@ -347,6 +349,7 @@ async function installFiles() {
 async function chmodRuntimeExecutables(runtimeDir) {
   const executableFiles = [
     path.join(runtimeDir, "bin", "goalctl.mjs"),
+    path.join(runtimeDir, "adapters", "mcp", "server.mjs"),
     path.join(runtimeDir, "adapters", "vscode-chat", "hook-runner.mjs"),
   ];
   for (const filePath of executableFiles) {
@@ -384,9 +387,36 @@ async function installVscodeChatAdapter() {
   await writeTextAtomic(vscodeAgentPath, agent.endsWith("\n") ? agent : `${agent}\n`);
 }
 
+function mcpServerConfig() {
+  return {
+    type: "local",
+    command: "node",
+    args: [mcpServerPath],
+    env: {
+      COPILOT_HOME: copilotRoot,
+    },
+    tools: ["*"],
+  };
+}
+
+async function mergeMcpConfig() {
+  await mkdir(copilotRoot, { recursive: true });
+  const configDocument = await readEditableJsonObjectDocument(mcpConfigPath, "Copilot CLI MCP config");
+  const config = configDocument.value;
+  config.mcpServers = config.mcpServers && typeof config.mcpServers === "object" && !Array.isArray(config.mcpServers)
+    ? config.mcpServers
+    : {};
+  config.mcpServers.goalSystem = mcpServerConfig();
+
+  await writeTextAtomic(mcpConfigPath, updateJsoncPath(configDocument.raw, ["mcpServers"], config.mcpServers));
+}
+
 async function preflightTargetConfigFiles(targets) {
   if (targets.has("cli")) {
     await preflightEditableJsonObjectDocument(settingsPath);
+  }
+  if (targets.has("mcp")) {
+    await preflightEditableJsonObjectDocument(mcpConfigPath);
   }
 }
 
@@ -402,6 +432,9 @@ async function main() {
   if (targets.has("vscode-chat")) {
     await installVscodeChatAdapter();
   }
+  if (targets.has("mcp")) {
+    await mergeMcpConfig();
+  }
 
   const installedLines = [
     `Installed Copilot Goal System (${[...targets].join(", ")}):`,
@@ -416,6 +449,9 @@ async function main() {
       `- ${instructionsPath}`
     );
   }
+  if (targets.has("mcp")) {
+    installedLines.push(`- ${mcpServerPath}`, `- ${mcpConfigPath}`);
+  }
   if (targets.has("vscode-chat")) {
     installedLines.push(`- ${vscodeAgentPath}`, `- ${vscodeHookConfigPath}`);
   }
@@ -423,6 +459,9 @@ async function main() {
   const nextSteps = [];
   if (targets.has("cli")) {
     nextSteps.push("Check local health:", `  npm run doctor -- --target ${targets.size > 1 ? "all" : "cli"}`, "Restart Copilot CLI, then run:", "  /skills reload", "  /env");
+  }
+  if (targets.has("mcp")) {
+    nextSteps.push("MCP server check:", "  /mcp show goalSystem");
   }
   if (targets.has("vscode-chat")) {
     nextSteps.push("In VS Code, reload the window, then select the Goal System custom agent in Copilot Chat.");

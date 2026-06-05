@@ -1,7 +1,7 @@
 {
   "name": "goal-system",
-  "description": "Main-session goal mode for GitHub Copilot CLI and VS Code Copilot Chat, with local continuity, drift recovery, and proof gates.",
-  "version": "1.1.21",
+  "description": "Main-session goal mode for GitHub Copilot CLI, MCP, and VS Code Copilot Chat, with local continuity, drift recovery, and proof gates.",
+  "version": "1.1.22",
   "author": {
     "name": "Soroush Yousefpour"
   },
@@ -9,6 +9,7 @@
   "keywords": [
     "goal",
     "copilot",
+    "mcp",
     "persistence",
     "execution",
     "verification"

@@ -1,8 +1,8 @@
 {
   "name": "copilot-goal-system",
   "displayName": "Copilot Goal System",
-  "description": "Install persisted goal mode for GitHub Copilot CLI and VS Code Copilot Chat.",
-  "version": "1.1.21",
+  "description": "Install persisted goal mode for GitHub Copilot CLI, MCP, and VS Code Copilot Chat.",
+  "version": "1.1.22",
   "publisher": "gabrimatic",
   "author": {
     "name": "Soroush Yousefpour",
@@ -42,6 +42,8 @@
     "copilot",
     "github-copilot",
     "goal",
+    "mcp",
+    "model-context-protocol",
     "workflow",
     "persistence",
     "hooks",
@@ -64,6 +66,7 @@
     "onStartupFinished",
     "onCommand:copilotGoalSystem.install",
     "onCommand:copilotGoalSystem.installCli",
+    "onCommand:copilotGoalSystem.installMcp",
     "onCommand:copilotGoalSystem.installVscodeChat",
     "onCommand:copilotGoalSystem.status",
     "onCommand:copilotGoalSystem.openWalkthrough",
@@ -86,6 +89,12 @@
         "title": "Install into Copilot CLI",
         "category": "Copilot Goal System",
         "icon": "$(terminal)"
+      },
+      {
+        "command": "copilotGoalSystem.installMcp",
+        "title": "Install MCP Server",
+        "category": "Copilot Goal System",
+        "icon": "$(server)"
       },
       {
         "command": "copilotGoalSystem.installVscodeChat",
@@ -848,7 +857,7 @@
           {
             "id": "install",
             "title": "Install or update the local goal system",
-            "description": "Copy the bundled goal system, install production dependencies, merge CLI hooks, add the VS Code Chat custom agent, and install local goal tools.",
+            "description": "Copy the bundled goal system, install production dependencies, merge CLI hooks, add the MCP server config, add the VS Code Chat custom agent, and install local goal tools.",
             "media": {
               "image": "media/walkthrough-install.svg",
               "altText": "Goal system install flow"
@@ -860,7 +869,7 @@
           {
             "id": "status",
             "title": "Check installation status",
-            "description": "Confirm extension files, dependencies, CLI hooks, VS Code Chat hooks, custom agent, and goalctl.",
+            "description": "Confirm extension files, dependencies, CLI hooks, MCP server config, VS Code Chat hooks, custom agent, and goalctl.",
             "media": {
               "image": "media/walkthrough-status.svg",
               "altText": "Goal system status checks"

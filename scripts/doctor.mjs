@@ -58,8 +58,8 @@ function parseArgs(argv) {
       options.target = arg.slice("--target=".length);
     }
   }
-  if (!["cli", "vscode-chat", "all"].includes(options.target)) {
-    throw new Error(`Unknown --target "${options.target}". Use cli, vscode-chat, or all.`);
+  if (!["cli", "vscode-chat", "mcp", "all"].includes(options.target)) {
+    throw new Error(`Unknown --target "${options.target}". Use cli, vscode-chat, mcp, or all.`);
   }
   options.home = path.resolve(options.home);
   options.cwd = path.resolve(options.cwd);
@@ -114,17 +114,31 @@ async function main() {
   const copilotRoot = copilotRootForHome(options.home);
   const extensionDir = path.join(copilotRoot, "extensions", "goal-system");
   const settingsPath = path.join(copilotRoot, "settings.json");
+  const mcpConfigPath = path.join(copilotRoot, "mcp-config.json");
   const goalctlPath = path.join(extensionDir, "bin", "goalctl.mjs");
+  const mcpServerPath = path.join(extensionDir, "adapters", "mcp", "server.mjs");
 
   const settings = await readJsonIfExists(settingsPath);
+  const mcpConfig = await readJsonIfExists(mcpConfigPath);
   const installedPackage = await readJsonIfExists(path.join(extensionDir, "package.json"));
   const copilotVersion = run("copilot", ["--version"], { env: profileEnv(options.home) });
   const jqVersion = run("jq", ["--version"], { env: profileEnv(options.home) });
   const goalctlSelfTest = run(process.execPath, [goalctlPath, "--self-test"], { env: profileEnv(options.home) });
+  const mcpServerSelfTest = run(process.execPath, [mcpServerPath, "--self-test"], { env: profileEnv(options.home) });
 
   const cliHookEventsPresent = settings.value ? CLI_HOOK_EVENTS.filter((eventName) => hookInstalled(settings.value, eventName)) : [];
   const duplicateCliGoalHooks = settings.value ? countDuplicateGoalHooks(settings.value, CLI_HOOK_EVENTS) : {};
   const staleCliDriftHookEvents = settings.value ? findStaleDriftHookEvents(settings.value) : [];
+  const configuredMcpServer = mcpConfig.value?.mcpServers?.goalSystem;
+  const mcpServerConfigured = Boolean(
+    configuredMcpServer &&
+      (configuredMcpServer.type === "local" || configuredMcpServer.type === "stdio") &&
+      configuredMcpServer.command === "node" &&
+      Array.isArray(configuredMcpServer.args) &&
+      configuredMcpServer.args[0] === mcpServerPath &&
+      Array.isArray(configuredMcpServer.tools) &&
+      configuredMcpServer.tools.includes("*")
+  );
   const cliChecks = [
     check("Copilot CLI command", copilotVersion.ok, copilotVersion.stdout || copilotVersion.stderr || copilotVersion.error, "Install or repair GitHub Copilot CLI."),
     check("Installed runtime package", installedPackage.value?.version === packageJson.version, installedPackage.value?.version || "missing", "Run ./install.sh --target cli."),
@@ -146,12 +160,25 @@ async function main() {
     check("VS Code Chat custom agent", await exists(path.join(copilotRoot, "agents", "goal-system.agent.md")), path.join(copilotRoot, "agents", "goal-system.agent.md"), "Run ./install.sh --target vscode-chat."),
     check("VS Code Chat hook config", await exists(path.join(copilotRoot, "hooks", "goal-system-vscode.json")), path.join(copilotRoot, "hooks", "goal-system-vscode.json"), "Run ./install.sh --target vscode-chat."),
   ];
+  const mcpChecks = [
+    check("Installed runtime package", installedPackage.value?.version === packageJson.version, installedPackage.value?.version || "missing", "Run ./install.sh --target mcp."),
+    check("MCP server file", await exists(mcpServerPath), mcpServerPath, "Run ./install.sh --target mcp."),
+    check("MCP server self-test", mcpServerSelfTest.ok, mcpServerSelfTest.stdout || mcpServerSelfTest.stderr || mcpServerSelfTest.error, "Run ./install.sh --target mcp."),
+    check("MCP config JSON", mcpConfig.exists && !mcpConfig.error, mcpConfig.error || mcpConfigPath, "Fix malformed mcp-config.json before reinstalling."),
+    check("MCP server config", mcpServerConfigured, JSON.stringify(configuredMcpServer || null), "Run ./install.sh --target mcp."),
+  ];
   const checks =
     options.target === "cli"
       ? cliChecks
       : options.target === "vscode-chat"
         ? vscodeChecks
-        : [...cliChecks, ...vscodeChecks.filter((item) => !cliChecks.some((existing) => existing.label === item.label))];
+        : options.target === "mcp"
+          ? mcpChecks
+          : [
+              ...cliChecks,
+              ...vscodeChecks.filter((item) => !cliChecks.some((existing) => existing.label === item.label)),
+              ...mcpChecks.filter((item) => !cliChecks.some((existing) => existing.label === item.label) && !vscodeChecks.some((existing) => existing.label === item.label)),
+            ];
 
   const report = {
     packageVersion: packageJson.version,
@@ -161,8 +188,10 @@ async function main() {
     paths: {
       copilotRoot,
       settingsPath,
+      mcpConfigPath,
       extensionDir,
       goalctlPath,
+      mcpServerPath,
     },
     checks,
     ok: checks.every((item) => item.ok),

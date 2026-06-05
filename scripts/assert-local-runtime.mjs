@@ -28,32 +28,22 @@ const packageLock = await readJson("package-lock.json");
 const vscodePackage = await readJson("vscode-extension/package.json");
 const vscodePackageLock = await readJson("vscode-extension/package-lock.json");
 const checkScript = String(packageJson.scripts?.check || "");
-const removedServerFile = path.join("adapters", "vscode-chat", `${String.fromCharCode(109, 99, 112)}-server.mjs`);
-const forbiddenSdkPackage = "@modelcontextprotocol/sdk";
+const mcpServerFile = path.join("adapters", "mcp", "server.mjs");
+const requiredSdkPackage = "@modelcontextprotocol/sdk";
 
-if (await exists(removedServerFile)) {
-  fail(`${removedServerFile} must not exist; the goal system uses local commands and direct tools.`);
+if (!(await exists(mcpServerFile))) {
+  fail(`${mcpServerFile} must exist; MCP support uses a local stdio server plus goalctl fallback.`);
 }
 
-for (const [name, manifest] of [
-  ["package.json", packageJson],
-  ["vscode-extension/package.json", vscodePackage],
-]) {
-  const dependencies = { ...(manifest.dependencies || {}), ...(manifest.devDependencies || {}) };
-  if (dependencies[forbiddenSdkPackage]) {
-    fail(`${name} must not depend on ${forbiddenSdkPackage}.`);
-  }
+const rootDependencies = { ...(packageJson.dependencies || {}), ...(packageJson.devDependencies || {}) };
+if (!rootDependencies[requiredSdkPackage]) {
+  fail(`package.json must depend on ${requiredSdkPackage}.`);
 }
 
-for (const [name, lockfile] of [
-  ["package-lock.json", packageLock],
-  ["vscode-extension/package-lock.json", vscodePackageLock],
-]) {
-  if (lockfile.packages?.[`node_modules/${forbiddenSdkPackage}`]) {
-    fail(`${name} must not include ${forbiddenSdkPackage}.`);
-  }
+if (!packageLock.packages?.[`node_modules/${requiredSdkPackage}`]) {
+  fail(`package-lock.json must include ${requiredSdkPackage}.`);
 }
 
-if (new RegExp(`${String.fromCharCode(109, 99, 112)}-server\\.mjs`).test(checkScript)) {
-  fail("npm run check must not reference the removed server entrypoint.");
+if (!checkScript.includes("adapters/mcp/server.mjs")) {
+  fail("npm run check must syntax-check adapters/mcp/server.mjs.");
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.22
+
+- Adds the bundled MCP stdio server and installs it into Copilot CLI as `mcpServers.goalSystem` during Recommended Setup.
+- Adds `Copilot Goal System: Install MCP Server` plus status checks for MCP config, server files, and production dependencies.
+- Updates Marketplace docs and bundled verification coverage for MCP tool discovery, goal flow, and completion-validation errors.
+
 ## 1.1.21
 
 - Adds direct VS Code tools `goal_system_checkpoint` and `goal_system_finish` so agents can save progress and complete goals through simple, purpose-named actions.

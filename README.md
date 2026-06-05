@@ -8,7 +8,7 @@
 
 Copilot Goal System keeps long-running Copilot work tied to one persisted Active Goal.
 
-It gives GitHub Copilot CLI and VS Code Copilot Chat local goal state, lifecycle hooks, subagent boundaries, drift warnings, and completion gates that require proof before a goal can close. Use it when a task needs to survive compaction, parallel sessions, subagents, and the moment where inspection turns one issue into ten.
+It gives GitHub Copilot CLI, MCP, and VS Code Copilot Chat local goal state, lifecycle hooks, subagent boundaries, drift warnings, and completion gates that require proof before a goal can close. Use it when a task needs to survive compaction, parallel sessions, subagents, and the moment where inspection turns one issue into ten.
 
 [Quick start](#quick-start) · [What it adds](#what-it-adds) · [How it works](#how-it-works) · [Docs](https://gabrimatic.github.io/copilot-goal-system/) · [Security](./SECURITY.md)
 
@@ -32,6 +32,7 @@ The Marketplace **Install** button installs the VS Code wrapper. The command abo
 
 - Copilot CLI stable adapter
 - VS Code Copilot Chat preview adapter
+- Copilot CLI MCP stdio server
 - local goal tools
 - lifecycle hooks
 - the Goal System custom agent
@@ -62,7 +63,7 @@ Install from the published docs site:
 curl -fsSL https://gabrimatic.github.io/copilot-goal-system/install.sh | bash
 ```
 
-`./install.sh` installs the Copilot CLI adapter by default. Use `./install.sh --target all` to install both CLI and VS Code Chat adapters.
+`./install.sh` installs the Copilot CLI adapter by default. Use `./install.sh --target all` to install CLI, MCP, and VS Code Chat support.
 
 For CLI mode, restart Copilot CLI, then run:
 
@@ -85,6 +86,7 @@ Make this project pass its test suite. Inspect first, fix every in-scope issue, 
 | Area | What it does |
 |------|--------------|
 | Goal tools | `goal_system_open`, `goal_system_status`, `goal_system_checkpoint`, and `goal_system_finish` create, reload, checkpoint, and finish persisted goals. Compatibility `update` and `close` tools remain available for older or advanced flows. Completion is refused without proof. |
+| MCP stdio server | Adds `goalSystem` to `~/.copilot/mcp-config.json`, exposing the same status, open, checkpoint, finish, update, close, block, and cancel operations through MCP. |
 | Lifecycle hooks | Restore goal context, write compact snapshots, block premature stop, warn on stale non-goal tool drift, and keep subagents outside goal ownership. |
 | VS Code Chat adapter | Adds the `Goal System` custom agent, VS Code hook config, direct VS Code goal tools, and local `goalctl` fallback. |
 | Goal contract | Installs the `goal` skill and instruction snippet so Copilot knows the work is execution, not a loose reminder. |
@@ -107,6 +109,7 @@ Default behavior:
 
 ```bash
 ./install.sh --target cli
+./install.sh --target mcp
 ./install.sh --target vscode-chat
 ./install.sh --target all
 ```
@@ -121,6 +124,12 @@ For Copilot CLI, the installer:
 4. Installs the hook helper at `~/.copilot/hooks/goal-context.sh` and merges hook entries into `~/.copilot/settings.json`.
 5. Installs `~/.copilot/extensions/goal-system/bin/goalctl.mjs` as the local fallback for goal status, open, checkpoint, finish, block, cancel, update, and close.
 
+For MCP, the installer:
+
+1. Installs the same runtime under `~/.copilot/extensions/goal-system/`.
+2. Marks `~/.copilot/extensions/goal-system/adapters/mcp/server.mjs` executable.
+3. Adds or updates `mcpServers.goalSystem` in `~/.copilot/mcp-config.json` with a local stdio command and `tools: ["*"]`.
+
 For VS Code Copilot Chat, the installer:
 
 1. Installs `~/.copilot/agents/goal-system.agent.md`.
@@ -130,7 +139,7 @@ For VS Code Copilot Chat, the installer:
 The installer preserves existing settings and writes backups before changing JSON, JSONC, or Markdown files. Config backups keep the original file permissions, and newly created config files default to owner-only permissions.
 Copilot CLI `settings.json` may contain comments and trailing commas; the installer accepts it and keeps comments outside the exact config subtree it updates.
 If `settings.json` is malformed or is not a JSON object, the installer preserves the original as an `*.invalid-backup-*` file, recreates a clean JSON object, and then applies the goal-system entries.
-Current installs do not create server config. The runtime path is local hooks, direct tools, and `goalctl`.
+Current recommended installs use local hooks, direct tools, the MCP stdio server, and `goalctl`. MCP is an additional goal API surface; `goalctl` remains the recovery fallback when a host hides or disables tools.
 During updates, it recognizes existing goal hooks written with `~`, `$HOME`, `$COPILOT_HOME`, absolute paths, or wrapper commands. If a composite hook already runs `goal-context.sh`, the installer keeps that hook and avoids adding a duplicate direct goal hook.
 During updates, the installer prepares a fresh runtime and production dependencies in a temporary directory before replacing the installed runtime, so failed dependency installs leave the previous runtime in place.
 
@@ -140,7 +149,7 @@ Run a local host health check any time the system feels off:
 npm run doctor
 ```
 
-Use `npm run doctor -- --target all` after installing both adapters.
+Use `npm run doctor -- --target all` after installing all local surfaces.
 
 Repository-level hook config is optional. Copy `.github/hooks/goal-system.json` into a repository if you want the same lifecycle hooks committed with a project.
 
@@ -161,6 +170,7 @@ User prompt
   -> goal skill explains the execution contract
   -> shared goal core owns persisted state, validation, and summaries
   -> CLI adapter exposes SDK tools and CLI hooks
+  -> MCP adapter exposes stdio tools from ~/.copilot/mcp-config.json
   -> VS Code Chat adapter exposes direct VS Code tools, goalctl fallback, and VS Code hooks
   -> tests verify the state machine without a live Copilot session
 ```
@@ -216,6 +226,7 @@ Expected result: fail before a goal session fixes it. The runtime E2E prompt use
 .
 ├── extension.mjs                         # Copilot SDK extension entrypoint
 ├── lib/goal-core.mjs                     # Goal state, validation, formatting, storage
+├── adapters/mcp/server.mjs               # MCP stdio server for Copilot CLI and compatible clients
 ├── adapters/vscode-chat                  # VS Code hooks and custom agent
 ├── bin/goalctl.mjs                       # Local goal command fallback
 ├── hooks/goal-context.sh                 # CLI lifecycle hook helper
@@ -255,6 +266,7 @@ rm -rf "$tmp_home"
 This release supports:
 
 - GitHub Copilot CLI: stable strict mode
+- GitHub Copilot CLI MCP: local stdio `goalSystem` server in `~/.copilot/mcp-config.json`
 - VS Code Copilot Chat: preview strict mode through VS Code agent hooks and direct VS Code goal tools
 
 VS Code agent hooks and language model tools are VS Code extension surfaces. VS Code shows a confirmation dialog for extension-contributed language model tools; choose Always Allow for the goal tools if you want the smoothest loop. If an organization disables hooks or extension tools, the VS Code Chat adapter falls back to hook context plus the local `goalctl` command, and cannot force tool use by itself.
