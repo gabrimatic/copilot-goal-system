@@ -204,6 +204,32 @@ test("completion validation requires real proof, no remaining work, and resolved
   assert.match(validateGoalCompletion(incomplete).join("\n"), /Discovered issues remain unresolved/);
 });
 
+test("concrete overlapping resolved issue text can cover a discovered issue", () => {
+  const goal = createGoalRecord(
+    {
+      objective: "Fix the sample calculator",
+      requirements: ["inspect and test the calculator"],
+      inspectionEvidence: ["read package.json, src/calculator.mjs, and tests/calculator.test.mjs"],
+      discoveredIssues: [
+        "subtract() returns left + right instead of left - right; causes failing unit test `subtract` in tests/calculator.test.mjs",
+      ],
+      resolvedIssues: ["subtract() corrected to use left - right; unit test `subtract` now passes"],
+      validationProof: ["npm test passed after the fix"],
+      verificationResults: ["npm test: 2 passed, 0 failed"],
+      requirementCoverage: ["inspect and test the calculator covered by file inspection and npm test"],
+      doneSoFar: ["fixed subtract implementation"],
+      remaining: [],
+      blockers: [],
+      completionAudit: ["no remaining work, blockers, or unresolved discovered issues"],
+    },
+    "session:overlap",
+    "/tmp/project"
+  );
+
+  assert.deepEqual(getOutstandingIssues(goal), []);
+  assert.deepEqual(validateGoalCompletion(goal), []);
+});
+
 test("dynamic horizon tasks can grow discovered issues and must resolve all before completion", () => {
   const initialIssues = ["issue 1", "issue 2", "issue 3"];
   const expandedIssues = Array.from({ length: 10 }, (_value, index) => `issue ${index + 1}`);

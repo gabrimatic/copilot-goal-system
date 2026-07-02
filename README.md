@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/gabrimatic/copilot-goal-system/actions/workflows/ci.yml/badge.svg)](https://github.com/gabrimatic/copilot-goal-system/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/node-20.19%2B%20%7C%2022.12%2B-brightgreen)](https://nodejs.org)
 [![Copilot CLI](https://img.shields.io/badge/GitHub_Copilot_CLI-supported-blue)](https://docs.github.com/copilot)
 [![VS Code Chat](https://img.shields.io/badge/VS_Code_Copilot_Chat-preview-orange)](https://gabrimatic.github.io/copilot-goal-system/product/vscode-chat/)
 
@@ -16,7 +16,7 @@ It gives GitHub Copilot CLI, MCP, and VS Code Copilot Chat local goal state, lif
 
 ## Quick start
 
-Runtime: **Node.js >= 20** and either **GitHub Copilot CLI** or **VS Code Copilot Chat**. CLI hook mode also needs a bash-compatible shell and `jq`.
+Runtime: **Node.js 20.19+ or 22.12+** and either **GitHub Copilot CLI** or **VS Code Copilot Chat**. CLI hook mode also needs a bash-compatible shell and `jq`.
 
 ### VS Code
 

@@ -380,8 +380,22 @@ async function installDependencies(runtimeDir) {
 }
 
 async function installVscodeChatAdapter() {
-  const hookConfig = await readFile(path.join(root, "adapters", "vscode-chat", "hooks", "goal-system.json"), "utf8");
-  await writeTextAtomic(vscodeHookConfigPath, hookConfig.endsWith("\n") ? hookConfig : `${hookConfig}\n`);
+  const rawHookConfig = await readFile(path.join(root, "adapters", "vscode-chat", "hooks", "goal-system.json"), "utf8");
+  const hookConfig = parseJsoncText(rawHookConfig, "VS Code Chat hook config");
+  const hookRunnerCommand = `node ${JSON.stringify(path.join(extensionDir, "adapters", "vscode-chat", "hook-runner.mjs"))}`;
+  for (const hooks of Object.values(hookConfig.hooks || {})) {
+    if (!Array.isArray(hooks)) continue;
+    for (const hook of hooks) {
+      if (!hook || typeof hook !== "object") continue;
+      if (typeof hook.command === "string" && hook.command.includes("hook-runner.mjs")) {
+        hook.command = hookRunnerCommand;
+      }
+      if (typeof hook.windows === "string" && hook.windows.includes("hook-runner.mjs")) {
+        hook.windows = hookRunnerCommand;
+      }
+    }
+  }
+  await writeTextAtomic(vscodeHookConfigPath, `${JSON.stringify(hookConfig, null, 2)}\n`);
 
   const agent = await readFile(path.join(root, "adapters", "vscode-chat", "agents", "goal-system.agent.md"), "utf8");
   await writeTextAtomic(vscodeAgentPath, agent.endsWith("\n") ? agent : `${agent}\n`);
