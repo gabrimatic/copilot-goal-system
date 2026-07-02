@@ -9,7 +9,7 @@ Install Copilot Goal System into your local GitHub Copilot profiles. The install
 
 | Requirement | Version | Notes |
 |-------------|---------|-------|
-| Node.js | `>= 20` | Required by the Copilot SDK package. |
+| Node.js | `20.19+ or 22.12+` | Required by the Copilot SDK package. |
 | npm | `>= 10` | Used by the installer to install production dependencies. |
 | GitHub Copilot CLI | current | Required for CLI strict mode. Restart it after install. |
 | Copilot CLI MCP | current | Required for MCP tool access through `~/.copilot/mcp-config.json`. |
@@ -331,4 +331,4 @@ cd ~/.copilot/extensions/goal-system
 npm ci --omit=dev --ignore-scripts
 ```
 
-If Node is too old, install Node.js >= 20 and rerun `./install.sh`.
+If Node is too old, install Node.js 20.19+ or 22.12+ and rerun `./install.sh`.
