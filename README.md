@@ -63,7 +63,7 @@ Install from the published docs site:
 curl -fsSL https://gabrimatic.github.io/copilot-goal-system/install.sh | bash
 ```
 
-`./install.sh` installs the Copilot CLI adapter by default. Use `./install.sh --target all` to install CLI, MCP, and VS Code Chat support.
+Piped this way, `install.sh` downloads the repository archive to a temporary directory and runs the real installer from there; cloned or downloaded checkouts run the installer directly instead. `./install.sh` installs the Copilot CLI adapter by default. Use `./install.sh --target all` to install CLI, MCP, and VS Code Chat support.
 
 For CLI mode, restart Copilot CLI, then run:
 
@@ -94,7 +94,7 @@ Make this project pass its test suite. Inspect first, fix every in-scope issue, 
 Default behavior:
 
 - Goal mode is **manual**. Normal prompts do not become goals.
-- `/goal` activation is recognized as a real slash command and creates a persisted draft goal before work begins.
+- `/goal` activation is recognized as a real slash command and creates a persisted draft goal before work begins. Explicit execution-contract phrases (for example "new goal" or "keep working until this is done") activate the same way without requiring the literal `/goal` command.
 - Goal state is **main-session only**. Subagents cannot open, update, read, or close goals.
 - Same-directory sessions are **isolated**. Automatic continuation happens only when exactly one open same-directory goal exists, and repeated records for the same resumed goal are treated as one goal.
 - The remaining queue is **dynamic**. Newly discovered in-scope issues are added to the goal and must be resolved before completion.
@@ -151,7 +151,7 @@ npm run doctor
 
 Use `npm run doctor -- --target all` after installing all local surfaces.
 
-Repository-level hook config is optional. Copy `.github/hooks/goal-system.json` into a repository if you want the same lifecycle hooks committed with a project.
+Repository-level hook config is optional. Copy `.github/hooks/goal-system.json` into a repository if you want the same lifecycle hooks committed with a project. Committed hook config files run automatically once a folder is trusted in Copilot CLI, so review any `.github/hooks/*.json` file in repositories you did not author before trusting them.
 
 ## Source and releases
 

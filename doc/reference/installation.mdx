@@ -116,18 +116,20 @@ Runtime updates are prepared in a temporary directory first. The installer copie
 
 The installer adds these hook events:
 
-```text
-sessionStart
-userPromptSubmitted
-preCompact
-agentStop
-subagentStart
-subagentStop
-postToolUseFailure
-notification
-```
+| Event | Purpose |
+|-------|---------|
+| `sessionStart` | Restores active goal context at the start of a session. |
+| `userPromptSubmitted` | Injects goal context and creates a persisted draft goal on `/goal` activation. |
+| `preCompact` | Writes a compact goal snapshot before context compaction. |
+| `agentStop` | Blocks a premature stop while an open goal remains active. |
+| `subagentStart` | Gives subagents a boundary message without exposing full goal state. |
+| `subagentStop` | Keeps subagent stop handling outside goal ownership. |
+| `preToolUse` | Warns on stale non-goal tool drift before a tool call runs; can hard-block when `GOAL_SYSTEM_HARD_DRIFT_BLOCK=1`. |
+| `postToolUse` | Records non-goal tool history used for drift tracking after a tool call runs. |
+| `postToolUseFailure` | Records tool history for tool calls that fail. |
+| `notification` | Injects compact active-goal context on agent idle or completion notifications. |
 
-Repository-level hook config is optional. Copy `.github/hooks/goal-system.json` into a repository when you want the hook setup committed with that project.
+Repository-level hook config is optional. Copy `.github/hooks/goal-system.json` into a repository when you want the hook setup committed with that project. Committed hook config files run automatically once a folder is trusted in Copilot CLI, so review any `.github/hooks/*.json` file in repositories you did not author before trusting them.
 
 The VS Code Chat adapter adds these hook events:
 

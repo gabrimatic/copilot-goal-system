@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -10,8 +10,36 @@ import { parse as parseJsonc } from "jsonc-parser";
 const execFileAsync = promisify(execFile);
 const root = path.resolve(".");
 const installer = path.join(root, "scripts", "install.mjs");
+const bootstrapInstallSh = path.join(root, "install.sh");
 const rootPackage = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
 process.env.GOAL_SYSTEM_TEST_LINK_NODE_MODULES = path.join(root, "node_modules");
+
+async function buildRepoTarball(destTarballPath) {
+  const { stdout } = await execFileAsync("git", ["-C", root, "ls-files"], { maxBuffer: 1024 * 1024 * 16 });
+  const files = stdout.split("\n").map((line) => line.trim()).filter(Boolean);
+  const stageDir = await mkdtemp(path.join(os.tmpdir(), "goal-tarball-stage-"));
+  const wrapperName = "copilot-goal-system-main";
+  const wrapperDir = path.join(stageDir, wrapperName);
+  for (const file of files) {
+    const src = path.join(root, file);
+    const dest = path.join(wrapperDir, file);
+    await mkdir(path.dirname(dest), { recursive: true });
+    await cp(src, dest);
+  }
+  // Pre-seed the dependency scripts/install.sh checks for so the bootstrap
+  // extraction does not need real npm registry access to run the installer.
+  await cp(path.join(root, "node_modules", "jsonc-parser"), path.join(wrapperDir, "node_modules", "jsonc-parser"), { recursive: true });
+  await execFileAsync("tar", ["-czf", destTarballPath, "-C", stageDir, wrapperName]);
+  await rm(stageDir, { recursive: true, force: true });
+}
+
+async function runPipedInstall(env) {
+  const scriptContent = await readFile(bootstrapInstallSh, "utf8");
+  const promise = execFileAsync("bash", [], { env, maxBuffer: 1024 * 1024 * 16 });
+  promise.child.stdin.write(scriptContent);
+  promise.child.stdin.end();
+  return promise;
+}
 
 async function readJsonc(filePath) {
   return parseJsonc(await readFile(filePath, "utf8"));
@@ -26,6 +54,47 @@ async function assertCommandFails(commandPromise, pattern) {
     return error;
   }
   assert.fail("Expected command to fail.");
+}
+
+test("piped install.sh (curl | bash) bootstraps from a downloaded archive", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-bootstrap-"));
+  const tarballDir = await mkdtemp(path.join(os.tmpdir(), "goal-install-bootstrap-tarball-"));
+  const tarballPath = path.join(tarballDir, "copilot-goal-system.tar.gz");
+
+  try {
+    await buildRepoTarball(tarballPath);
+
+    const env = {
+      ...process.env,
+      HOME: home,
+      GOAL_SYSTEM_INSTALL_SOURCE_URL: `file://${tarballPath}`,
+      GOAL_SYSTEM_TEST_LINK_NODE_MODULES: path.join(root, "node_modules"),
+    };
+
+    const { stdout } = await runPipedInstall(env);
+    assert.match(stdout, /Installed Copilot Goal System/);
+
+    const copilotDir = path.join(home, ".copilot");
+    assert.equal(await exists(path.join(copilotDir, "extensions", "goal-system")), true);
+    assert.equal(await exists(path.join(copilotDir, "skills", "goal", "SKILL.md")), true);
+    assert.equal(await exists(path.join(copilotDir, "hooks", "goal-context.sh")), true);
+    assert.equal(await exists(path.join(copilotDir, "extensions", "goal-system", "bin", "goalctl.mjs")), true);
+
+    const installedPackage = JSON.parse(await readFile(path.join(copilotDir, "extensions", "goal-system", "package.json"), "utf8"));
+    assert.equal(installedPackage.version, rootPackage.version);
+  } finally {
+    await rm(home, { recursive: true, force: true });
+    await rm(tarballDir, { recursive: true, force: true });
+  }
+});
+
+async function exists(filePath) {
+  try {
+    await stat(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 test("installer merges hooks, writes backups, and preserves existing settings", async () => {
@@ -580,6 +649,122 @@ test("installer treats an empty settings file as an empty settings object", asyn
 
   const settings = JSON.parse(await readFile(path.join(copilotDir, "settings.json"), "utf8"));
   assert.equal(settings.hooks.agentStop.some((hook) => hook.bash === "$HOME/.copilot/hooks/goal-context.sh"), true);
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("installer replaces an array-typed settings.hooks value instead of silently installing zero hooks", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-array-hooks-"));
+  const copilotDir = path.join(home, ".copilot");
+  await execFileAsync("mkdir", ["-p", copilotDir]);
+  await writeFile(
+    path.join(copilotDir, "settings.json"),
+    JSON.stringify(
+      {
+        theme: "auto",
+        hooks: [],
+      },
+      null,
+      2
+    )
+  );
+
+  await execFileAsync(process.execPath, [installer], {
+    cwd: root,
+    env: { ...process.env, HOME: home },
+    maxBuffer: 1024 * 1024 * 8,
+  });
+
+  const settings = JSON.parse(await readFile(path.join(copilotDir, "settings.json"), "utf8"));
+  assert.equal(settings.theme, "auto");
+  assert.equal(Array.isArray(settings.hooks), false);
+
+  const expectedEvents = [
+    "sessionStart",
+    "userPromptSubmitted",
+    "preCompact",
+    "agentStop",
+    "subagentStart",
+    "subagentStop",
+    "preToolUse",
+    "postToolUse",
+    "postToolUseFailure",
+    "notification",
+  ];
+  for (const eventName of expectedEvents) {
+    assert.equal(
+      Array.isArray(settings.hooks[eventName]) && settings.hooks[eventName].some((hook) => hook.bash === "$HOME/.copilot/hooks/goal-context.sh"),
+      true,
+      `expected goal-context hook for ${eventName}`
+    );
+  }
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("installer restores the shipped copilot-instructions snippet when the installed body has drifted", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-snippet-drift-"));
+  const copilotDir = path.join(home, ".copilot");
+  const instructionsPath = path.join(copilotDir, "copilot-instructions.md");
+  const shippedSnippet = (await readFile(path.join(root, "instructions", "copilot-instructions.goal-snippet.md"), "utf8")).trim();
+
+  await execFileAsync(process.execPath, [installer], {
+    cwd: root,
+    env: { ...process.env, HOME: home },
+    maxBuffer: 1024 * 1024 * 8,
+  });
+
+  const original = await readFile(instructionsPath, "utf8");
+  const mutated = original.replace("goal_system_*", "MUTATED_SNIPPET_BODY");
+  assert.notEqual(mutated, original);
+  await writeFile(instructionsPath, mutated);
+
+  await execFileAsync(process.execPath, [installer], {
+    cwd: root,
+    env: { ...process.env, HOME: home },
+    maxBuffer: 1024 * 1024 * 8,
+  });
+
+  const restored = await readFile(instructionsPath, "utf8");
+  assert.doesNotMatch(restored, /MUTATED_SNIPPET_BODY/);
+  const restoredBetweenMarkers = restored
+    .slice(restored.indexOf("<!-- copilot-goal-system snippet start -->") + "<!-- copilot-goal-system snippet start -->".length, restored.indexOf("<!-- copilot-goal-system snippet end -->"))
+    .trim();
+  assert.equal(restoredBetweenMarkers, shippedSnippet);
+
+  const backups = await execFileAsync("find", [copilotDir, "-name", "copilot-instructions.md.backup-*"], { encoding: "utf8" });
+  assert.equal(backups.stdout.trim().split("\n").filter(Boolean).length, 1);
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("installer leaves copilot-instructions.md untouched when the installed snippet already matches", async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "goal-install-snippet-stable-"));
+  const copilotDir = path.join(home, ".copilot");
+  const instructionsPath = path.join(copilotDir, "copilot-instructions.md");
+
+  await execFileAsync(process.execPath, [installer], {
+    cwd: root,
+    env: { ...process.env, HOME: home },
+    maxBuffer: 1024 * 1024 * 8,
+  });
+
+  const beforeContent = await readFile(instructionsPath, "utf8");
+  const beforeMtimeMs = (await stat(instructionsPath)).mtimeMs;
+
+  await execFileAsync(process.execPath, [installer], {
+    cwd: root,
+    env: { ...process.env, HOME: home },
+    maxBuffer: 1024 * 1024 * 8,
+  });
+
+  const afterContent = await readFile(instructionsPath, "utf8");
+  const afterMtimeMs = (await stat(instructionsPath)).mtimeMs;
+  assert.equal(afterContent, beforeContent);
+  assert.equal(afterMtimeMs, beforeMtimeMs);
+
+  const backups = await execFileAsync("find", [copilotDir, "-name", "copilot-instructions.md.backup-*"], { encoding: "utf8" });
+  assert.equal(backups.stdout.trim(), "");
 
   await rm(home, { recursive: true, force: true });
 });

@@ -117,7 +117,7 @@ VS Code updates the extension through the Marketplace. After an extension update
 Copilot Goal System: Install Recommended Setup
 ```
 
-The source repository is the single editable source for the goal-system runtime. The Marketplace package contains a generated bundled copy so the installer works offline after the VSIX is installed.
+The source repository is the single editable source for the goal-system runtime. The Marketplace package contains a generated bundled copy, so the installer does not need network access to the source repository. The first install on a given machine still needs npm registry access to fetch `@github/copilot-sdk`, `@modelcontextprotocol/sdk`, and `zod` unless those packages are already in the local npm cache; only `jsonc-parser` ships vendored with the extension.
 The local runtime update replaces the installed snapshot rather than overlaying files.
 
 ## Documentation

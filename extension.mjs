@@ -19,6 +19,7 @@ import {
   mergeGoal,
   normalizeCwd,
   normalizeText,
+  normalizeUniqueList,
   nowIso,
   safeSessionId,
   shouldEnforceDrift,
@@ -91,6 +92,19 @@ async function persistAndTrack(invocation, cwd, goal) {
   return persisted;
 }
 
+async function mutateAndTrack(invocation, cwd, mutator) {
+  const persisted = await store.mutateGoalRecord(invocation.sessionId, cwd, mutator);
+  if (persisted) activateSessionIfOpen(invocation.sessionId, persisted);
+  return persisted;
+}
+
+function otherOpenGoalWarning(candidates, persistedGoal) {
+  const others = candidates.filter((candidate) => isOpenGoal(candidate.goal) && candidate.goal.id !== persistedGoal.id);
+  const sessionIds = [...new Set(others.map((candidate) => safeSessionId(candidate.goal.sessionId || "")))].filter(Boolean);
+  if (!sessionIds.length) return "";
+  return `\n\nWarning: other open goals exist in this workspace for session(s): ${sessionIds.join(", ")}. Use goal_system_status / pass sessionId explicitly to avoid cross-session confusion.`;
+}
+
 async function hydrateSessionGoal(invocation, cwd, goalRecord) {
   if (!goalRecord?.goal) return null;
   const persisted = await persistAndTrack(invocation, cwd, goalRecord.goal);
@@ -104,14 +118,12 @@ async function flushPendingHistory(sessionId) {
   pendingHistoryBySession.delete(sid);
 
   const sessionCwd = getSessionCwd(sid);
-  const loadedGoal = await store.loadGoalRecord(sid, sessionCwd);
-  if (!loadedGoal || !isOpenGoal(loadedGoal.goal)) return;
-
-  const history = Array.isArray(loadedGoal.goal.history) ? loadedGoal.goal.history.slice(-39) : [];
-  for (const entry of entries.slice(-20)) history.push(entry);
-
-  const nextGoal = { ...loadedGoal.goal, history: history.slice(-40) };
-  await persistAndTrack({ sessionId: sid }, sessionCwd, nextGoal);
+  await mutateAndTrack({ sessionId: sid }, sessionCwd, (goal) => {
+    if (!isOpenGoal(goal)) return null;
+    const history = Array.isArray(goal.history) ? goal.history.slice() : [];
+    for (const entry of entries) history.push(entry);
+    return { ...goal, history: history.slice(-40) };
+  });
 }
 
 async function flushAllPending() {
@@ -272,12 +284,13 @@ const session = await joinSession({
 
       if (activeGoal) {
         const sid = safeSessionId(invocation.sessionId);
+        const drift = driftCountBySession.get(sid) || 0;
         driftCountBySession.set(sid, 0);
-        const turnGoal = await persistAndTrack(
-          invocation,
-          sessionCwd,
-          appendGoalHistory(activeGoal, "turn", "User prompt submitted")
-        );
+        const turnGoal =
+          (await mutateAndTrack(invocation, sessionCwd, (goal) => {
+            if (!isOpenGoal(goal)) return null;
+            return appendGoalHistory(goal, "turn", "User prompt submitted");
+          })) || activeGoal;
 
         if (explicitlyReplaces && !isContinuePrompt) {
           return {
@@ -292,7 +305,6 @@ const session = await joinSession({
           };
         }
 
-        const drift = driftCountBySession.get(sid) || 0;
         let driftEnforcement = "";
         if (drift >= DRIFT_BLOCK_THRESHOLD) {
           driftEnforcement = `\nCRITICAL DRIFT: ${buildDriftEnforcement(drift, DRIFT_BLOCK_THRESHOLD)}`;
@@ -410,6 +422,32 @@ const session = await joinSession({
       scheduleFlush();
     },
 
+    onPostToolUseFailure: async (input, invocation) => {
+      const toolName = normalizeText(input.toolName, 120);
+      if (HISTORY_SKIP_TOOLS.has(toolName) || isGoalSystemToolName(toolName)) return;
+      const sessionId = safeSessionId(invocation.sessionId);
+      const sessionCwd = setSessionCwd(invocation.sessionId, input.cwd);
+      if (!sessionId) return;
+      if (isLikelySubagentInvocation(invocation)) return;
+
+      if (!activeGoalSessions.has(sessionId)) {
+        const loadedGoal = await store.loadGoalRecord(sessionId, sessionCwd);
+        if (!loadedGoal || !isOpenGoal(loadedGoal.goal)) return;
+        activateSessionIfOpen(sessionId, loadedGoal.goal);
+      }
+
+      driftCountBySession.set(sessionId, (driftCountBySession.get(sessionId) || 0) + 1);
+
+      const note = `tool-failed: ${summarizeToolUse(input) || toolName || "unknown"}`;
+      if (!pendingHistoryBySession.has(sessionId)) pendingHistoryBySession.set(sessionId, []);
+      const entries = pendingHistoryBySession.get(sessionId);
+      if (entries.length < MAX_PENDING_ENTRIES) {
+        entries.push({ at: new Date().toISOString(), type: "tool", note });
+      }
+      scheduleFlush();
+      store.auditLog("tool_failure", { sid: sessionId, toolName });
+    },
+
     onErrorOccurred: async (input, invocation) => {
       store.auditLog("sdk_error", {
         sid: safeSessionId(invocation.sessionId),
@@ -464,28 +502,37 @@ const session = await joinSession({
         if (subagentFailure) return subagentFailure;
         await ensureFlushed(invocation.sessionId);
         const sessionCwd = getSessionCwd(invocation.sessionId, invocationCwd(invocation));
-        const loadedGoal = await store.loadGoalRecord(invocation.sessionId, sessionCwd);
-        if (loadedGoal && isOpenGoal(loadedGoal.goal) && args.replaceExisting !== true) {
-          store.auditLog("open_blocked", { sid: safeSessionId(invocation.sessionId), reason: "existing_active" });
-          return {
-            textResultForLlm:
-              "An active persisted goal already exists for this main session/workspace. Use goal_system_checkpoint to continue it, or call goal_system_open with replaceExisting: true only when the prompt clearly replaces the current goal.",
-            resultType: "failure",
-          };
-        }
-        const goal = createGoalRecord(args, invocation.sessionId, sessionCwd, {
-          sourcePrompt: args.sourcePrompt,
-          historyNote: args.historyNote || "Goal opened or replaced",
+
+        let refusal = null;
+        let replaced = false;
+        const persisted = await mutateAndTrack(invocation, sessionCwd, (existingGoal) => {
+          if (isOpenGoal(existingGoal) && args.replaceExisting !== true) {
+            store.auditLog("open_blocked", { sid: safeSessionId(invocation.sessionId), reason: "existing_active" });
+            refusal = {
+              textResultForLlm:
+                "An active persisted goal already exists for this main session/workspace. Use goal_system_checkpoint to continue it, or call goal_system_open with replaceExisting: true only when the prompt clearly replaces the current goal.",
+              resultType: "failure",
+            };
+            return null;
+          }
+          replaced = isOpenGoal(existingGoal);
+          return createGoalRecord(args, invocation.sessionId, sessionCwd, {
+            sourcePrompt: args.sourcePrompt,
+            historyNote: args.historyNote || "Goal opened or replaced",
+          });
         });
-        const persisted = await persistAndTrack(invocation, sessionCwd, goal);
+
+        if (refusal) return refusal;
+
         driftCountBySession.set(safeSessionId(invocation.sessionId), 0);
         store.auditLog("goal_open", {
           sid: safeSessionId(invocation.sessionId),
           id: persisted.id,
           promptHash: persisted.sourcePromptHash,
-          replaced: Boolean(loadedGoal && isOpenGoal(loadedGoal.goal)),
+          replaced,
         });
-        return formatGoalSummary(persisted);
+        const warning = otherOpenGoalWarning(await store.loadWorkspaceGoalCandidates(sessionCwd), persisted);
+        return `${formatGoalSummary(persisted)}${warning}`;
       },
     },
 
@@ -505,17 +552,6 @@ const session = await joinSession({
         if (subagentFailure) return subagentFailure;
         await ensureFlushed(invocation.sessionId);
         const sessionCwd = getSessionCwd(invocation.sessionId, invocationCwd(invocation));
-        const loadedGoal = await store.loadGoalRecord(invocation.sessionId, sessionCwd);
-        if (!loadedGoal || !loadedGoal.goal) {
-          return { textResultForLlm: "No persisted goal exists yet. Use goal_system_open first.", resultType: "failure" };
-        }
-        if (!isOpenGoal(loadedGoal.goal)) {
-          return {
-            textResultForLlm:
-              "The persisted goal is already closed. Start a new goal with goal_system_open when the prompt explicitly asks for a replacement or new goal.",
-            resultType: "failure",
-          };
-        }
         if (typeof args.completionStatus === "string" && !MUTABLE_GOAL_STATUSES.includes(args.completionStatus)) {
           store.auditLog("checkpoint_blocked", { sid: safeSessionId(invocation.sessionId), reason: "invalid_status", status: args.completionStatus });
           return {
@@ -531,12 +567,30 @@ const session = await joinSession({
             resultType: "failure",
           };
         }
-        const checkpointPatch = { ...args };
-        if (loadedGoal.goal.completionStatus === "draft" && checkpointPatch.completionStatus === undefined) {
-          checkpointPatch.completionStatus = "active";
-        }
-        const nextGoal = mergeGoal(loadedGoal.goal, checkpointPatch, "update", checkpointPatch.historyNote || "Checkpoint saved");
-        const persisted = await persistAndTrack(invocation, sessionCwd, nextGoal);
+
+        let refusal = null;
+        const persisted = await mutateAndTrack(invocation, sessionCwd, (goal) => {
+          if (!goal) {
+            refusal = { textResultForLlm: "No persisted goal exists yet. Use goal_system_open first.", resultType: "failure" };
+            return null;
+          }
+          if (!isOpenGoal(goal)) {
+            refusal = {
+              textResultForLlm:
+                "The persisted goal is already closed. Start a new goal with goal_system_open when the prompt explicitly asks for a replacement or new goal.",
+              resultType: "failure",
+            };
+            return null;
+          }
+          const checkpointPatch = { ...args };
+          if (goal.completionStatus === "draft" && checkpointPatch.completionStatus === undefined) {
+            checkpointPatch.completionStatus = "active";
+          }
+          return mergeGoal(goal, checkpointPatch, "update", checkpointPatch.historyNote || "Checkpoint saved");
+        });
+
+        if (refusal) return refusal;
+
         driftCountBySession.set(safeSessionId(invocation.sessionId), 0);
         store.auditLog("goal_checkpoint", { sid: safeSessionId(invocation.sessionId), id: persisted.id, fields: changedFields });
         return `Checkpoint saved.\n${formatGoalSummary(persisted)}`;
@@ -559,17 +613,6 @@ const session = await joinSession({
         if (subagentFailure) return subagentFailure;
         await ensureFlushed(invocation.sessionId);
         const sessionCwd = getSessionCwd(invocation.sessionId, invocationCwd(invocation));
-        const loadedGoal = await store.loadGoalRecord(invocation.sessionId, sessionCwd);
-        if (!loadedGoal || !loadedGoal.goal) {
-          return { textResultForLlm: "No persisted goal exists yet. Use goal_system_open first.", resultType: "failure" };
-        }
-        if (!isOpenGoal(loadedGoal.goal)) {
-          return {
-            textResultForLlm:
-              "The persisted goal is already closed. Start a new goal with goal_system_open when the prompt explicitly asks for a replacement or new goal.",
-            resultType: "failure",
-          };
-        }
         if (typeof args.completionStatus === "string" && !MUTABLE_GOAL_STATUSES.includes(args.completionStatus)) {
           store.auditLog("update_blocked", { sid: safeSessionId(invocation.sessionId), reason: "invalid_status", status: args.completionStatus });
           return {
@@ -585,8 +628,26 @@ const session = await joinSession({
             resultType: "failure",
           };
         }
-        const nextGoal = mergeGoal(loadedGoal.goal, args, "update", args.historyNote || "Goal state updated");
-        const persisted = await persistAndTrack(invocation, sessionCwd, nextGoal);
+
+        let refusal = null;
+        const persisted = await mutateAndTrack(invocation, sessionCwd, (goal) => {
+          if (!goal) {
+            refusal = { textResultForLlm: "No persisted goal exists yet. Use goal_system_open first.", resultType: "failure" };
+            return null;
+          }
+          if (!isOpenGoal(goal)) {
+            refusal = {
+              textResultForLlm:
+                "The persisted goal is already closed. Start a new goal with goal_system_open when the prompt explicitly asks for a replacement or new goal.",
+              resultType: "failure",
+            };
+            return null;
+          }
+          return mergeGoal(goal, args, "update", args.historyNote || "Goal state updated");
+        });
+
+        if (refusal) return refusal;
+
         driftCountBySession.set(safeSessionId(invocation.sessionId), 0);
         store.auditLog("goal_update", { sid: safeSessionId(invocation.sessionId), id: persisted.id, fields: changedFields });
         return formatGoalSummary(persisted);
@@ -609,37 +670,57 @@ const session = await joinSession({
         if (subagentFailure) return subagentFailure;
         await ensureFlushed(invocation.sessionId);
         const sessionCwd = getSessionCwd(invocation.sessionId, invocationCwd(invocation));
-        const loadedGoal = await store.loadGoalRecord(invocation.sessionId, sessionCwd);
-        if (!loadedGoal || !loadedGoal.goal) {
-          return { textResultForLlm: "No persisted goal exists yet, so there is nothing to finish.", resultType: "failure" };
-        }
-        if (!isOpenGoal(loadedGoal.goal)) {
-          return {
-            textResultForLlm:
-              "The persisted goal is already closed. Start a new goal with goal_system_open when the prompt explicitly asks for a replacement or new goal.",
-            resultType: "failure",
+
+        let refusal = null;
+        const persisted = await mutateAndTrack(invocation, sessionCwd, (goal) => {
+          if (!goal) {
+            refusal = { textResultForLlm: "No persisted goal exists yet, so there is nothing to finish.", resultType: "failure" };
+            return null;
+          }
+          if (!isOpenGoal(goal)) {
+            refusal = {
+              textResultForLlm:
+                "The persisted goal is already closed. Start a new goal with goal_system_open when the prompt explicitly asks for a replacement or new goal.",
+              resultType: "failure",
+            };
+            return null;
+          }
+
+          const remainingProvided = Array.isArray(args.remaining);
+          const priorRemaining = normalizeUniqueList(goal.remaining);
+          if (!remainingProvided && priorRemaining.length) {
+            store.auditLog("finish_refused", { sid: safeSessionId(invocation.sessionId), id: goal.id, reason: "remaining_recorded" });
+            refusal = {
+              textResultForLlm: `Refusing to finish the goal. Remaining work is still recorded: ${priorRemaining.join(" | ")}. Resolve it, then call goal_system_finish again with remaining: [] explicitly, or move it into blockers/issueResolutions first.`,
+              resultType: "failure",
+            };
+            return null;
+          }
+
+          const patch = {
+            ...args,
+            completionStatus: "complete",
+            blockers: Array.isArray(args.blockers) ? args.blockers : [],
+            remaining: remainingProvided ? args.remaining : [],
           };
-        }
+          const nextGoal = mergeGoal(goal, patch, "close", args.summary || "Goal finished");
+          nextGoal.closedAt = nowIso();
 
-        const patch = {
-          ...args,
-          completionStatus: "complete",
-          blockers: Array.isArray(args.blockers) ? args.blockers : [],
-          remaining: Array.isArray(args.remaining) ? args.remaining : [],
-        };
-        const nextGoal = mergeGoal(loadedGoal.goal, patch, "close", args.summary || "Goal finished");
-        nextGoal.closedAt = nowIso();
+          const failures = validateGoalCompletion(nextGoal);
+          if (failures.length) {
+            store.auditLog("finish_refused", { sid: safeSessionId(invocation.sessionId), id: goal.id, reasons: failures });
+            refusal = {
+              textResultForLlm: `Refusing to finish the goal. Missing or conflicting completion evidence:\n- ${failures.join("\n- ")}`,
+              resultType: "failure",
+            };
+            return null;
+          }
 
-        const failures = validateGoalCompletion(nextGoal);
-        if (failures.length) {
-          store.auditLog("finish_refused", { sid: safeSessionId(invocation.sessionId), id: loadedGoal.goal.id, reasons: failures });
-          return {
-            textResultForLlm: `Refusing to finish the goal. Missing or conflicting completion evidence:\n- ${failures.join("\n- ")}`,
-            resultType: "failure",
-          };
-        }
+          return nextGoal;
+        });
 
-        const persisted = await persistAndTrack(invocation, sessionCwd, nextGoal);
+        if (refusal) return refusal;
+
         driftCountBySession.delete(safeSessionId(invocation.sessionId));
         store.auditLog("goal_finish", { sid: safeSessionId(invocation.sessionId), id: persisted.id });
         return `Goal finished.\n${formatGoalSummary(persisted, { includeHistory: false })}`;
@@ -664,32 +745,40 @@ const session = await joinSession({
         if (subagentFailure) return subagentFailure;
         await ensureFlushed(invocation.sessionId);
         const sessionCwd = getSessionCwd(invocation.sessionId, invocationCwd(invocation));
-        const loadedGoal = await store.loadGoalRecord(invocation.sessionId, sessionCwd);
-        if (!loadedGoal || !loadedGoal.goal) {
-          return { textResultForLlm: "No persisted goal exists yet, so there is nothing to close.", resultType: "failure" };
-        }
 
-        const patch = {
-          ...args,
-          completionStatus: GOAL_STATUSES.includes(args.completionStatus) ? args.completionStatus : loadedGoal.goal.completionStatus,
-          blockers: args.completionStatus === "complete" && !Array.isArray(args.blockers) ? [] : args.blockers,
-          remaining: args.completionStatus === "complete" && !Array.isArray(args.remaining) ? [] : args.remaining,
-        };
-        const nextGoal = mergeGoal(loadedGoal.goal, patch, "close", args.summary || `Goal marked ${args.completionStatus}`);
-        nextGoal.closedAt = nowIso();
-
-        if (args.completionStatus === "complete") {
-          const failures = validateGoalCompletion(nextGoal);
-          if (failures.length) {
-            store.auditLog("close_refused", { sid: safeSessionId(invocation.sessionId), id: loadedGoal.goal.id, reasons: failures });
-            return {
-              textResultForLlm: `Refusing to mark the goal complete. Missing or conflicting completion evidence:\n- ${failures.join("\n- ")}`,
-              resultType: "failure",
-            };
+        let refusal = null;
+        const persisted = await mutateAndTrack(invocation, sessionCwd, (goal) => {
+          if (!goal) {
+            refusal = { textResultForLlm: "No persisted goal exists yet, so there is nothing to close.", resultType: "failure" };
+            return null;
           }
-        }
 
-        const persisted = await persistAndTrack(invocation, sessionCwd, nextGoal);
+          const patch = {
+            ...args,
+            completionStatus: GOAL_STATUSES.includes(args.completionStatus) ? args.completionStatus : goal.completionStatus,
+            blockers: args.completionStatus === "complete" && !Array.isArray(args.blockers) ? [] : args.blockers,
+            remaining: args.completionStatus === "complete" && !Array.isArray(args.remaining) ? [] : args.remaining,
+          };
+          const nextGoal = mergeGoal(goal, patch, "close", args.summary || `Goal marked ${args.completionStatus}`);
+          nextGoal.closedAt = nowIso();
+
+          if (args.completionStatus === "complete") {
+            const failures = validateGoalCompletion(nextGoal);
+            if (failures.length) {
+              store.auditLog("close_refused", { sid: safeSessionId(invocation.sessionId), id: goal.id, reasons: failures });
+              refusal = {
+                textResultForLlm: `Refusing to mark the goal complete. Missing or conflicting completion evidence:\n- ${failures.join("\n- ")}`,
+                resultType: "failure",
+              };
+              return null;
+            }
+          }
+
+          return nextGoal;
+        });
+
+        if (refusal) return refusal;
+
         driftCountBySession.delete(safeSessionId(invocation.sessionId));
         store.auditLog("goal_close", { sid: safeSessionId(invocation.sessionId), id: persisted.id, status: args.completionStatus });
         return formatGoalSummary(persisted, { includeHistory: false });

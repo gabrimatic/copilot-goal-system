@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.23
+
+- Serializes every goal read-modify-write behind a cross-process lock shared by the SDK extension, MCP server, goalctl, and both lifecycle hooks, so parallel tool calls and concurrent sessions no longer silently lose checkpoint evidence or tool history.
+- Hardens the completion gate: proof fields must carry substantive entries instead of placeholder strings, goals need recorded requirements, a goal can no longer be created already complete, and `finish` refuses to silently discard recorded remaining work (`goalctl finish --clear-remaining` states the intent explicitly).
+- Fixes the piped `curl -fsSL ... | bash` install, which never worked: `install.sh` now bootstraps by downloading the repository archive to a temporary directory before delegating to the real installer.
+- Repairs installer edge cases: an array-typed `hooks` value in `settings.json` no longer causes a silent zero-hook install, hook writes are verified after merging, and the copilot-instructions snippet updates in place when the shipped content changes.
+- Makes the CLI stop hook honor `stop_hook_active` so a blocked stop cannot loop forever, recognizes `goal_system_block`/`goal_system_cancel` as goal tools in drift tracking, and parses large hook payloads in a single pass to stay far inside the hook timeout.
+- Improves privacy and containment: secret redaction now covers every goal content field, the phone-number pattern no longer mangles dates and IP addresses, the audit log is created owner-only, MCP path overrides require an explicit server-side opt-in, and re-injected goal text is framed as data rather than instructions.
+- Warns when `goal_system_open` creates a goal while other sessions hold open goals in the same directory, records failed tool calls in drift tracking, keeps full pending tool history instead of truncating it, and emits JSON error output for `goalctl --json` failures.
+- Tightens the VS Code publish workflow to semver tags with a tag-to-version assertion, slims the installed runtime bundle (drops `doc/` and test suites, keeps the E2E prompt), and corrects installation, architecture, and activation docs to match real behavior.
+
 ## 1.1.22
 
 - Adds a first-class MCP stdio server at `adapters/mcp/server.mjs` with status, open, checkpoint, finish, update, close, block, and cancel goal tools backed by the shared goal core.

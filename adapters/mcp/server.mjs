@@ -1,6 +1,8 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -15,12 +17,15 @@ import {
   isOpenGoal,
   mergeGoal,
   normalizeCwd,
+  normalizeUniqueList,
   safeSessionId,
   validateGoalCompletion,
 } from "../../lib/goal-core.mjs";
 
 const SERVER_NAME = "copilot-goal-system";
-const SERVER_VERSION = "1.1.22";
+const packageJsonPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "package.json");
+const SERVER_VERSION = JSON.parse(readFileSync(packageJsonPath, "utf8")).version;
+const ALLOW_PATH_OVERRIDES = process.env.GOAL_SYSTEM_ALLOW_PATH_OVERRIDES === "1";
 
 const baseFields = {
   sessionId: z.string().optional().describe("Goal session ID from the client or hook context."),
@@ -98,7 +103,17 @@ function copilotRootForInput(input = {}) {
   return path.join(home, ".copilot");
 }
 
+function assertPathOverridesAllowed(input = {}) {
+  const overridden = ["home", "stateRoot", "workspaceStateRoot"].filter((key) => input[key] !== undefined);
+  if (overridden.length && !ALLOW_PATH_OVERRIDES) {
+    throw new Error(
+      `Path overrides (${overridden.join(", ")}) are disabled for this MCP server. Set GOAL_SYSTEM_ALLOW_PATH_OVERRIDES=1 in the server environment to allow them.`
+    );
+  }
+}
+
 async function createStore(input = {}) {
+  assertPathOverridesAllowed(input);
   const copilotRoot = copilotRootForInput(input);
   const store = new GoalStore({
     stateRoot: input.stateRoot || process.env.GOAL_SYSTEM_STATE_ROOT || path.join(copilotRoot, "session-state", "goal-system"),
@@ -162,10 +177,11 @@ function patchFromInput(input = {}) {
   return patch;
 }
 
-async function loadGoal(store, input) {
-  const { sessionId, cwd, inferred, record: inferredRecord } = await contextFromInput(store, input);
-  const record = inferredRecord || (sessionId ? await store.loadGoalRecord(sessionId, cwd) : null);
-  return { sessionId, cwd, inferred, record };
+function otherOpenGoalWarning(candidates, persistedGoal) {
+  const others = candidates.filter((candidate) => isOpenGoal(candidate.goal) && candidate.goal.id !== persistedGoal.id);
+  const sessionIds = [...new Set(others.map((candidate) => safeSessionId(candidate.goal.sessionId || "")))].filter(Boolean);
+  if (!sessionIds.length) return "";
+  return `\n\nWarning: other open goals exist in this workspace for session(s): ${sessionIds.join(", ")}. Use goal_system_status / pass sessionId explicitly to avoid cross-session confusion.`;
 }
 
 function toolResult(text, goal = null, extra = {}) {
@@ -205,31 +221,30 @@ async function handleOpen(input) {
   const sessionId = explicitSessionId(input);
   if (!sessionId) throw new Error("open requires sessionId from the client or hook context.");
   const cwd = inputCwd(input);
-  const record = await store.loadGoalRecord(sessionId, cwd);
-  if (record && isOpenGoal(record.goal) && input.replaceExisting !== true) {
-    throw new Error(
-      "An active persisted goal already exists for this session/workspace. Use checkpoint/update, or set replaceExisting only when the prompt clearly replaces the current goal."
-    );
-  }
   const patch = patchFromInput(input);
-  const goal = createGoalRecord(patch, sessionId, cwd, {
-    sourcePrompt: patch.sourcePrompt,
-    historyNote: patch.historyNote || "Goal opened or replaced from MCP",
+
+  let replaced = false;
+  const persisted = await store.mutateGoalRecord(sessionId, cwd, (existingGoal) => {
+    if (isOpenGoal(existingGoal) && input.replaceExisting !== true) {
+      throw new Error(
+        "An active persisted goal already exists for this session/workspace. Use checkpoint/update, or set replaceExisting only when the prompt clearly replaces the current goal."
+      );
+    }
+    replaced = isOpenGoal(existingGoal);
+    return createGoalRecord(patch, sessionId, cwd, {
+      sourcePrompt: patch.sourcePrompt,
+      historyNote: patch.historyNote || "Goal opened or replaced from MCP",
+    });
   });
-  const persisted = await store.persistGoalRecord(sessionId, cwd, goal);
-  store.auditLog("mcp_open", {
-    sid: sessionId,
-    id: persisted.id,
-    replaced: Boolean(record && isOpenGoal(record.goal)),
-  });
-  return toolResult(formatGoalSummary(persisted), persisted, { action: "open" });
+
+  store.auditLog("mcp_open", { sid: sessionId, id: persisted.id, replaced });
+  const warning = otherOpenGoalWarning(await store.loadWorkspaceGoalCandidates(cwd), persisted);
+  return toolResult(`${formatGoalSummary(persisted)}${warning}`, persisted, { action: "open" });
 }
 
 async function handleUpdate(input, label = "update") {
   const store = await createStore(input);
-  const { sessionId, cwd, record } = await loadGoal(store, input);
-  if (!record || !record.goal) throw new Error("No persisted goal exists yet. Use open first.");
-  if (!isOpenGoal(record.goal)) throw new Error("The persisted goal is already closed. Open a new goal only for an explicit replacement.");
+  const { sessionId, cwd } = await contextFromInput(store, input);
   if (typeof input.completionStatus === "string" && !MUTABLE_GOAL_STATUSES.includes(input.completionStatus)) {
     throw new Error("checkpoint/update cannot mark a goal complete or cancelled. Use finish/close after verification.");
   }
@@ -240,18 +255,23 @@ async function handleUpdate(input, label = "update") {
     throw new Error("checkpoint/update requires at least one real state field such as doneSoFar, remaining, blockers, inspectionEvidence, or verificationResults.");
   }
 
-  const checkpointPatch = { ...patch };
-  if (label === "checkpoint" && record.goal.completionStatus === "draft" && checkpointPatch.completionStatus === undefined) {
-    checkpointPatch.completionStatus = "active";
-  }
+  const persisted = await store.mutateGoalRecord(sessionId, cwd, (goal) => {
+    if (!goal) throw new Error("No persisted goal exists yet. Use open first.");
+    if (!isOpenGoal(goal)) throw new Error("The persisted goal is already closed. Open a new goal only for an explicit replacement.");
 
-  const nextGoal = mergeGoal(
-    record.goal,
-    checkpointPatch,
-    "update",
-    checkpointPatch.historyNote || (label === "checkpoint" ? "Checkpoint saved from MCP" : "Goal state updated from MCP")
-  );
-  const persisted = await store.persistGoalRecord(sessionId, cwd, nextGoal);
+    const checkpointPatch = { ...patch };
+    if (label === "checkpoint" && goal.completionStatus === "draft" && checkpointPatch.completionStatus === undefined) {
+      checkpointPatch.completionStatus = "active";
+    }
+
+    return mergeGoal(
+      goal,
+      checkpointPatch,
+      "update",
+      checkpointPatch.historyNote || (label === "checkpoint" ? "Checkpoint saved from MCP" : "Goal state updated from MCP")
+    );
+  });
+
   store.auditLog("mcp_update", { sid: sessionId, id: persisted.id, fields: changedFields });
   const prefix = label === "checkpoint" ? "Checkpoint saved.\n" : "";
   return toolResult(`${prefix}${formatGoalSummary(persisted)}`, persisted, { action: label });
@@ -259,34 +279,47 @@ async function handleUpdate(input, label = "update") {
 
 async function handleClose(input, label = "close") {
   const store = await createStore(input);
-  const { sessionId, cwd, record } = await loadGoal(store, input);
-  if (!record || !record.goal) throw new Error("No persisted goal exists yet, so there is nothing to close.");
-
+  const { sessionId, cwd } = await contextFromInput(store, input);
   const patch = patchFromInput(input);
   if (!GOAL_STATUSES.includes(patch.completionStatus) || patch.completionStatus === "draft" || patch.completionStatus === "active") {
     throw new Error("close requires completionStatus complete, blocked, or cancelled. Agent-friendly aliases are finish, block, and cancel.");
   }
 
-  const nextGoal = mergeGoal(
-    record.goal,
-    {
-      ...patch,
-      blockers: patch.completionStatus === "complete" && !Array.isArray(patch.blockers) ? [] : patch.blockers,
-      remaining: patch.completionStatus === "complete" && !Array.isArray(patch.remaining) ? [] : patch.remaining,
-    },
-    "close",
-    patch.summary || `Goal marked ${patch.completionStatus} from MCP`
-  );
-  nextGoal.closedAt = new Date().toISOString();
+  const persisted = await store.mutateGoalRecord(sessionId, cwd, (goal) => {
+    if (!goal) throw new Error("No persisted goal exists yet, so there is nothing to close.");
 
-  if (patch.completionStatus === "complete") {
-    const failures = validateGoalCompletion(nextGoal);
-    if (failures.length) {
-      throw new Error(`Refusing to mark the goal complete. Missing or conflicting completion evidence:\n- ${failures.join("\n- ")}`);
+    if (label === "finish") {
+      const remainingProvided = Array.isArray(input.remaining);
+      const priorRemaining = normalizeUniqueList(goal.remaining);
+      if (!remainingProvided && priorRemaining.length) {
+        throw new Error(
+          `Refusing to finish the goal. Remaining work is still recorded: ${priorRemaining.join(" | ")}. Resolve it, then call goal_system_finish again with remaining: [] explicitly, or move it into blockers/issueResolutions first.`
+        );
+      }
     }
-  }
 
-  const persisted = await store.persistGoalRecord(sessionId, cwd, nextGoal);
+    const nextGoal = mergeGoal(
+      goal,
+      {
+        ...patch,
+        blockers: patch.completionStatus === "complete" && !Array.isArray(patch.blockers) ? [] : patch.blockers,
+        remaining: patch.completionStatus === "complete" && !Array.isArray(patch.remaining) ? [] : patch.remaining,
+      },
+      "close",
+      patch.summary || `Goal marked ${patch.completionStatus} from MCP`
+    );
+    nextGoal.closedAt = new Date().toISOString();
+
+    if (patch.completionStatus === "complete") {
+      const failures = validateGoalCompletion(nextGoal);
+      if (failures.length) {
+        throw new Error(`Refusing to mark the goal complete. Missing or conflicting completion evidence:\n- ${failures.join("\n- ")}`);
+      }
+    }
+
+    return nextGoal;
+  });
+
   store.auditLog("mcp_close", { sid: sessionId, id: persisted.id, status: patch.completionStatus });
   const prefix =
     label === "finish" ? "Goal finished.\n" :

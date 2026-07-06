@@ -104,17 +104,31 @@ function config() {
   return vscode.workspace.getConfiguration("copilotGoalSystem");
 }
 
-function configuredHome() {
-  const override = String(config().get("homeOverride", "") || "").trim();
-  if (!override) return os.homedir();
-  if (override === "~") return os.homedir();
-  if (override.startsWith("~/")) return path.join(os.homedir(), override.slice(2));
+function resolveOverrideHome(override, homedir) {
+  if (override === "~") return homedir;
+  if (override.startsWith("~/")) return path.join(homedir, override.slice(2));
   return path.resolve(override);
 }
 
+// homeOverride, when set, must win over an ambient COPILOT_HOME the extension host
+// inherited from the shell: that env var otherwise takes absolute precedence in
+// copilotRootForHome, silently ignoring the user's setting.
+function resolveCopilotRoot(overrideValue, env = process.env, homedir = os.homedir()) {
+  const override = String(overrideValue || "").trim();
+  if (!override) {
+    const home = homedir;
+    return { home, copilotRoot: copilotRootForHome(home, env), overridden: false };
+  }
+  const home = resolveOverrideHome(override, homedir);
+  return { home, copilotRoot: path.join(home, ".copilot"), overridden: true };
+}
+
+function configuredHome() {
+  return resolveCopilotRoot(config().get("homeOverride", "")).home;
+}
+
 function installedPaths() {
-  const home = configuredHome();
-  const copilotRoot = copilotRootForHome(home);
+  const { home, copilotRoot } = resolveCopilotRoot(config().get("homeOverride", ""));
   return {
     home,
     copilotRoot,
@@ -183,6 +197,9 @@ class GoalSystemLanguageTool {
       close: "Close persisted goal",
     }[this.kind];
     const sessionId = String(options.input?.sessionId || "missing");
+    if (this.kind === "status") {
+      return { invocationMessage: action };
+    }
     return {
       invocationMessage: action,
       confirmationMessages: {
@@ -524,7 +541,7 @@ function formatStatusReport(status) {
     `Installed package: ${status.paths.extensionDir}`,
     `Extension version: ${status.bundledVersion}`,
     `Installed runtime version: ${status.installedVersion || (status.runtimeState.installed ? "unknown" : "missing")}`,
-    `Runtime files: ${status.runtimeState.status === "current" ? "Current" : "Update needed"}`,
+    `Runtime files: ${status.runtimeState.needsUpdate ? "Update needed" : "Current"}`,
     `CLI: ${summary.cli}`,
     `VS Code Chat: ${summary.vscodeChat}`,
     `MCP: ${summary.mcp}`,
@@ -734,11 +751,11 @@ function setStatusBarInstalling(statusBar) {
   statusBar.show();
 }
 
-function commandEnv(home) {
+function commandEnv(home, copilotRoot) {
   const env = { ...process.env };
   env.HOME = home;
   env.USERPROFILE = home;
-  env.COPILOT_HOME = copilotRootForHome(home, env);
+  env.COPILOT_HOME = copilotRoot;
   return env;
 }
 
@@ -795,12 +812,62 @@ async function assertNode20(output, env) {
   }
 }
 
+const INSTALL_LOCK_STALE_MS = 10 * 60 * 1000;
+
+function installLockFilePath(copilotRoot) {
+  return path.join(copilotRoot, "extensions", ".goal-system.install.lock");
+}
+
+// Claims the cross-process install lock. Returns the lock file path on success,
+// or null when a fresh lock already belongs to another window/process.
+async function acquireInstallLock(copilotRoot) {
+  const lockFile = installLockFilePath(copilotRoot);
+  await fsp.mkdir(path.dirname(lockFile), { recursive: true });
+  try {
+    await fsp.writeFile(lockFile, String(process.pid), { flag: "wx" });
+    return lockFile;
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+  }
+
+  let stats;
+  try {
+    stats = await fsp.stat(lockFile);
+  } catch {
+    stats = null;
+  }
+  if (stats && Date.now() - stats.mtimeMs < INSTALL_LOCK_STALE_MS) {
+    return null;
+  }
+
+  await fsp.rm(lockFile, { force: true });
+  await fsp.writeFile(lockFile, String(process.pid), { flag: "wx" });
+  return lockFile;
+}
+
 async function installGoalSystem(context, output, statusBar, target) {
+  if (installInProgress) {
+    vscode.window.showInformationMessage("Copilot Goal System install is already running.");
+    return;
+  }
+
   const paths = installedPaths();
   const script = installerPath(context);
 
   if (!fs.existsSync(script)) {
     vscode.window.showErrorMessage("The bundled goal-system installer is missing. Reinstall this VS Code extension and try again.");
+    return;
+  }
+
+  let lockFile;
+  try {
+    lockFile = await acquireInstallLock(paths.copilotRoot);
+  } catch (error) {
+    vscode.window.showErrorMessage(`Could not create the install lock: ${error.message || String(error)}`);
+    return;
+  }
+  if (!lockFile) {
+    vscode.window.showInformationMessage("Another VS Code window is already installing Copilot Goal System. Try again once it finishes.");
     return;
   }
 
@@ -822,7 +889,7 @@ async function installGoalSystem(context, output, statusBar, target) {
         cancellable: false,
       },
       async (progress) => {
-        const env = commandEnv(paths.home);
+        const env = commandEnv(paths.home, paths.copilotRoot);
         progress.report({ message: "Checking Node.js" });
         await assertNode20(output, env);
         progress.report({ message: "Copying files and installing dependencies" });
@@ -845,6 +912,7 @@ async function installGoalSystem(context, output, statusBar, target) {
     vscode.window.showErrorMessage(`Copilot Goal System install failed: ${message}`);
   } finally {
     installInProgress = false;
+    await fsp.rm(lockFile, { force: true }).catch(() => {});
   }
 }
 
@@ -893,4 +961,6 @@ module.exports = {
   activate,
   deactivate,
   surfaceSummary,
+  resolveCopilotRoot,
+  acquireInstallLock,
 };

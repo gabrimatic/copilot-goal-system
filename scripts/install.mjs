@@ -12,6 +12,7 @@ const require = createRequire(import.meta.url);
 const { parseJsoncText, updateJsoncPath } = require("../lib/jsonc-file.cjs");
 const { isBundledRuntimePath } = require("../lib/runtime-bundle.cjs");
 const { copilotRootForHome } = require("../lib/copilot-paths.cjs");
+const { hookInstalled } = require("../lib/install-status.cjs");
 const home = os.homedir();
 const copilotRoot = copilotRootForHome(home);
 const extensionDir = path.join(copilotRoot, "extensions", "goal-system");
@@ -243,7 +244,7 @@ async function mergeSettingsHooks() {
   await mkdir(copilotRoot, { recursive: true });
   const settingsDocument = await readEditableJsonObjectDocument(settingsPath, "Copilot CLI settings");
   const settings = settingsDocument.value;
-  settings.hooks = settings.hooks && typeof settings.hooks === "object" ? settings.hooks : {};
+  settings.hooks = settings.hooks && typeof settings.hooks === "object" && !Array.isArray(settings.hooks) ? settings.hooks : {};
   removeStaleCliDriftHooks(settings);
 
   for (const [eventName, goalHooks] of Object.entries(hookEvents())) {
@@ -277,6 +278,19 @@ async function mergeSettingsHooks() {
   }
 
   await writeTextAtomic(settingsPath, updateJsoncPath(settingsDocument.raw, ["hooks"], settings.hooks));
+  await verifySettingsHooksWritten();
+}
+
+async function verifySettingsHooksWritten() {
+  const raw = await readFile(settingsPath, "utf8");
+  const written = parseJsoncText(raw, "Copilot CLI settings");
+  const missingEvents = Object.keys(hookEvents()).filter((eventName) => !hookInstalled(written, eventName));
+  if (missingEvents.length > 0) {
+    throw new Error(
+      `${settingsPath} is missing goal-system hook entries for: ${missingEvents.join(", ")} after writing. ` +
+        `Check for a malformed or unexpected "hooks" value (for example an array) and rerun ./install.sh --target cli.`
+    );
+  }
 }
 
 async function appendInstructionsSnippet() {
@@ -288,11 +302,24 @@ async function appendInstructionsSnippet() {
     if (error.code !== "ENOENT") throw error;
   }
 
-  if (existing.includes(markerStart)) return;
+  const snippet = (await readFile(path.join(root, "instructions", "copilot-instructions.goal-snippet.md"), "utf8")).trim();
 
-  const snippet = await readFile(path.join(root, "instructions", "copilot-instructions.goal-snippet.md"), "utf8");
-  const next = `${existing.trimEnd()}\n\n${markerStart}\n${snippet.trim()}\n${markerEnd}\n`;
-  await writeTextAtomic(instructionsPath, next, { backup: Boolean(existing) });
+  const markerStartIndex = existing.indexOf(markerStart);
+  if (markerStartIndex === -1) {
+    const next = `${existing.trimEnd()}\n\n${markerStart}\n${snippet}\n${markerEnd}\n`;
+    await writeTextAtomic(instructionsPath, next, { backup: Boolean(existing) });
+    return;
+  }
+
+  const afterStart = markerStartIndex + markerStart.length;
+  const markerEndIndex = existing.indexOf(markerEnd, afterStart);
+  const between = markerEndIndex === -1 ? existing.slice(afterStart) : existing.slice(afterStart, markerEndIndex);
+  if (markerEndIndex !== -1 && between.trim() === snippet) return;
+
+  const before = existing.slice(0, afterStart);
+  const after = markerEndIndex === -1 ? "" : existing.slice(markerEndIndex + markerEnd.length);
+  const next = `${before}\n${snippet}\n${markerEnd}${after}`;
+  await writeTextAtomic(instructionsPath, next);
 }
 
 async function installFiles() {

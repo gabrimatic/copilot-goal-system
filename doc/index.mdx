@@ -20,6 +20,8 @@ It gives GitHub Copilot CLI, MCP, and VS Code Copilot Chat local goal state, lif
 curl -fsSL https://gabrimatic.github.io/copilot-goal-system/install.sh | bash
 ```
 
+Piped this way, `install.sh` downloads the repository archive to a temporary directory and runs the real installer from there.
+
 For CLI, MCP, and VS Code Chat support:
 
 ```bash
@@ -39,7 +41,7 @@ curl -fsSL https://gabrimatic.github.io/copilot-goal-system/install.sh | bash -s
 ## Default behavior
 
 - Goal mode is manual. Normal prompts do not become goals.
-- `/goal` activation creates a persisted draft goal before work begins.
+- `/goal` activation creates a persisted draft goal before work begins. Explicit execution-contract phrases (for example "new goal" or "keep working until this is done") activate the same way without requiring the literal `/goal` command.
 - Goal state is main-session only. Subagents cannot open, update, read, or close goals.
 - Drift warnings are recoverable. Stale tool use escalates from warning to critical reminder, but default installs do not deny every tool call when the checkpoint tool is missing or ignored.
 - Same-directory sessions are isolated.

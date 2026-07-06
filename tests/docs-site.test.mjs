@@ -66,7 +66,22 @@ test("Docs Pages workflow owns docs deploys and full CI ignores docs-only change
   }
 
   assert.doesNotMatch(ciWorkflow, /paths-ignore:[\s\S]*-\s+"install\.sh"/);
-  assert.equal(runtimeEntries.includes("doc"), true);
+  assert.equal(runtimeEntries.includes("doc"), false);
   assert.equal(runtimeEntries.includes("docs"), false);
   assert.doesNotMatch(prepareBundle, /"docs"/);
+});
+
+test("runtime bundle allowlist ships the E2E prompt but not full tests/ or doc/", () => {
+  assert.equal(runtimeEntries.includes("tests"), false);
+  assert.equal(runtimeEntries.some((entry) => entry === "tests/prompts" || entry.startsWith("tests/prompts/")), true);
+});
+
+test("Publish VS Code Extension workflow only tags semver releases and checks the pushed tag against the extension version", async () => {
+  const publishWorkflow = await readFile(path.join(root, ".github/workflows/publish-vscode.yml"), "utf8");
+
+  assert.match(publishWorkflow, /tags:\s*\n\s*-\s*"v\[0-9\]\+\.\[0-9\]\+\.\[0-9\]\+"/);
+  assert.doesNotMatch(publishWorkflow, /-\s*"v\*"/);
+  assert.match(publishWorkflow, /if:\s*\$\{\{\s*github\.event_name == 'push'\s*\}\}/);
+  assert.match(publishWorkflow, /vscode-extension\/package\.json'\)\.version/);
+  assert.match(publishWorkflow, /GITHUB_REF_NAME.*!=.*"v\$version"/);
 });

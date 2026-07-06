@@ -58,6 +58,9 @@ test("doctor reports a healthy all-target local install", async () => {
   assert.equal(report.checks.find((item) => item.label === "MCP server self-test").ok, true);
   assert.equal(report.checks.find((item) => item.label === "All CLI lifecycle hooks").ok, true);
   assert.equal(report.checks.find((item) => item.label === "No stale wrapped drift hooks").ok, true);
+  const installedRuntimeCheck = report.checks.find((item) => item.label === "Installed runtime package");
+  assert.equal(installedRuntimeCheck.ok, true);
+  assert.equal(installedRuntimeCheck.info, false);
 
   const installedDoctor = path.join(home, ".copilot", "extensions", "goal-system", "scripts", "doctor.mjs");
   const installedDoctorResult = await execFileAsync(process.execPath, [installedDoctor, "--home", home, "--target", "all", "--json"], {
@@ -65,7 +68,12 @@ test("doctor reports a healthy all-target local install", async () => {
     env,
     maxBuffer: 1024 * 1024 * 4,
   });
-  assert.equal(JSON.parse(installedDoctorResult.stdout).ok, true);
+  const installedReport = JSON.parse(installedDoctorResult.stdout);
+  assert.equal(installedReport.ok, true);
+  const installedRuntimeCheckFromInstalledCopy = installedReport.checks.find((item) => item.label === "Installed runtime package");
+  assert.equal(installedRuntimeCheckFromInstalledCopy.ok, true);
+  assert.equal(installedRuntimeCheckFromInstalledCopy.info, true);
+  assert.match(installedRuntimeCheckFromInstalledCopy.details, /version sync check skipped/);
 
   await rm(home, { recursive: true, force: true });
 });

@@ -45,7 +45,9 @@ The duplicated writes are intentional. They let the system survive session resum
 
 ## Isolation model
 
-The session id and cwd hash are both part of the lookup model. Three main sessions can run in the same directory and each will read only its own session goal during normal operation.
+The session id and cwd hash are both part of the lookup model. Multiple main sessions can run in the same directory and each will read only its own session goal during normal, cooperative operation.
+
+This is a correctness convention, not a security boundary. `sessionId` is supplied by the calling host and is not verified against any credential, so any process running as the same OS user can pass an arbitrary `sessionId` and read or modify another session's goal state. The real security boundary is the OS user account under which Copilot and the goal-system tools run; do not rely on session or cwd isolation to separate untrusted callers on a shared account.
 
 Same-directory continuation is conservative:
 
@@ -138,7 +140,7 @@ The VS Code Chat adapter uses:
 - `adapters/vscode-chat/hook-runner.mjs`
 - `bin/goalctl.mjs`
 
-CLI and VS Code hooks inject `sessionId` and `cwd` into the session context. Direct tools, MCP tools, and `goalctl` require those values so multiple sessions in one workspace stay isolated. Persisted tool history drives drift enforcement across hook invocations.
+CLI and VS Code hooks inject `sessionId` and `cwd` into the session context. Direct tools, MCP tools, and `goalctl` require those values as a cooperative isolation convention so multiple sessions in one workspace stay out of each other's way during normal use; see [Isolation model](#isolation-model) for why this is not a security boundary. Persisted tool history drives drift enforcement across hook invocations.
 `UserPromptSubmit` gives the hook-backed adapters an activation bridge: `/goal` creates a persisted draft goal immediately, and VS Code Chat can also hydrate one unambiguous same-directory goal into the current session on an explicit continue prompt.
 
 ## Drift recovery

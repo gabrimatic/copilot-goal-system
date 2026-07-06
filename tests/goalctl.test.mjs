@@ -226,6 +226,8 @@ test("goalctl close durably records audit before process exit", async () => {
     cwd,
     "--objective",
     "Close with an immediate audit trail",
+    "--requirement",
+    "durable audit evidence",
   ], { env });
 
   await runGoalctl([
@@ -244,12 +246,165 @@ test("goalctl close durably records audit before process exit", async () => {
     "goalctl close accepted only after evidence fields were present",
     "--verification",
     "The audit log contained goalctl_close without waiting for another process",
+    "--coverage",
+    "durable audit evidence covered by reading the audit log after close",
     "--audit",
     "No remaining work, no blockers, and durable audit evidence present",
   ], { env });
 
   const auditLog = await readFile(path.join(home, ".copilot", "session-state", "goal-system", "audit.log"), "utf8");
   assert.match(auditLog, /"e":"goalctl_close"/);
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("goalctl checkpoint survives 6 concurrent processes without losing any doneSoFar entry", async () => {
+  const home = await mkdtemp(path.join(tmpdir(), "goalctl-concurrent-"));
+  const cwd = path.join(home, "project");
+  await mkdir(cwd, { recursive: true });
+  const env = { ...process.env, HOME: home };
+
+  await runGoalctl(
+    ["open", "--session-id", "session-concurrent", "--cwd", cwd, "--objective", "Survive concurrent checkpoints"],
+    { env }
+  );
+
+  const runs = Array.from({ length: 6 }, (_value, index) =>
+    runGoalctl(
+      ["checkpoint", "--session-id", "session-concurrent", "--cwd", cwd, "--done", `concurrent entry ${index + 1}`],
+      { env }
+    )
+  );
+  await Promise.all(runs);
+
+  const goal = JSON.parse(
+    await readFile(path.join(home, ".copilot", "session-state", "goal-system", "by-session", "session-concurrent.json"), "utf8")
+  );
+  for (let index = 1; index <= 6; index += 1) {
+    assert.equal(goal.doneSoFar.includes(`concurrent entry ${index}`), true, `missing concurrent entry ${index}`);
+  }
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("goalctl finish refuses recorded remaining work until explicitly cleared", async () => {
+  const home = await mkdtemp(path.join(tmpdir(), "goalctl-finish-remaining-"));
+  const cwd = path.join(home, "project");
+  await mkdir(cwd, { recursive: true });
+  const env = { ...process.env, HOME: home };
+
+  await runGoalctl([
+    "open",
+    "--session-id",
+    "session-finish-remaining",
+    "--cwd",
+    cwd,
+    "--objective",
+    "Finish only after remaining is resolved",
+    "--requirement",
+    "ship the fix",
+    "--next",
+    "write the missing test",
+  ], { env });
+
+  const finishArgs = [
+    "finish",
+    "--session-id",
+    "session-finish-remaining",
+    "--cwd",
+    cwd,
+    "--done",
+    "Implemented the fix",
+    "--evidence",
+    "Inspected the target module and reproduced the bug",
+    "--proof",
+    "Completion gate exercised with real evidence",
+    "--verify",
+    "npm run verify passed with zero failures",
+    "--coverage",
+    "ship the fix covered by the passing verify run",
+    "--audit",
+    "No blockers recorded and evidence is present",
+  ];
+
+  await assert.rejects(runGoalctl(finishArgs, { env }), (error) => {
+    assert.match(error.stderr, /Refusing to finish the goal/);
+    assert.match(error.stderr, /Remaining work is still recorded/);
+    assert.match(error.stderr, /write the missing test/);
+    return true;
+  });
+
+  const finish = await runGoalctl([...finishArgs, "--clear-remaining"], { env });
+  assert.match(finish.stdout, /Goal finished/);
+
+  const goal = JSON.parse(
+    await readFile(
+      path.join(home, ".copilot", "session-state", "goal-system", "by-session", "session-finish-remaining.json"),
+      "utf8"
+    )
+  );
+  assert.equal(goal.completionStatus, "complete");
+  assert.deepEqual(goal.remaining, []);
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("goalctl checkpoint does not count --replace-existing as a real state field", async () => {
+  const home = await mkdtemp(path.join(tmpdir(), "goalctl-replace-existing-"));
+  const cwd = path.join(home, "project");
+  await mkdir(cwd, { recursive: true });
+  const env = { ...process.env, HOME: home };
+
+  await runGoalctl(
+    ["open", "--session-id", "session-replace-existing", "--cwd", cwd, "--objective", "Guard against fake checkpoints"],
+    { env }
+  );
+
+  await assert.rejects(
+    runGoalctl(["checkpoint", "--session-id", "session-replace-existing", "--cwd", cwd, "--replace-existing"], { env }),
+    (error) => {
+      assert.match(error.stderr, /requires at least one real state field/);
+      return true;
+    }
+  );
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("goalctl open warns when another session already has an open goal in the same workspace", async () => {
+  const home = await mkdtemp(path.join(tmpdir(), "goalctl-open-warning-"));
+  const cwd = path.join(home, "project");
+  await mkdir(cwd, { recursive: true });
+  const env = { ...process.env, HOME: home };
+
+  await runGoalctl(["open", "--session-id", "session-first", "--cwd", cwd, "--objective", "First open goal"], { env });
+  const second = await runGoalctl(
+    ["open", "--session-id", "session-second", "--cwd", cwd, "--objective", "Second open goal"],
+    { env }
+  );
+
+  assert.match(second.stdout, /other open goals exist/);
+  assert.match(second.stdout, /session-first/);
+
+  await rm(home, { recursive: true, force: true });
+});
+
+test("goalctl emits JSON error output when --json is requested and the command fails", async () => {
+  const home = await mkdtemp(path.join(tmpdir(), "goalctl-json-error-"));
+  const cwd = path.join(home, "project");
+  await mkdir(cwd, { recursive: true });
+  const env = { ...process.env, HOME: home };
+
+  await assert.rejects(
+    runGoalctl(["checkpoint", "--session-id", "session-json-error", "--cwd", cwd, "--done", "--json"], { env }),
+    (error) => {
+      assert.equal(error.code, 1);
+      const parsed = JSON.parse(error.stdout);
+      assert.equal(parsed.ok, false);
+      assert.match(parsed.error, /--done requires a value/);
+      return true;
+    }
+  );
 
   await rm(home, { recursive: true, force: true });
 });

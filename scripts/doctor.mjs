@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, realpath } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -96,13 +96,22 @@ function run(command, args, options = {}) {
   };
 }
 
-function check(label, ok, details = "", remediation = "") {
+function check(label, ok, details = "", remediation = "", info = false) {
   return {
     label,
     ok: Boolean(ok),
     details,
     remediation,
+    info: Boolean(info),
   };
+}
+
+async function sameFilesystemPath(left, right) {
+  const [leftReal, rightReal] = await Promise.all([
+    realpath(left).catch(() => path.resolve(left)),
+    realpath(right).catch(() => path.resolve(right)),
+  ]);
+  return leftReal === rightReal;
 }
 
 function profileEnv(home) {
@@ -121,6 +130,24 @@ async function main() {
   const settings = await readJsonIfExists(settingsPath);
   const mcpConfig = await readJsonIfExists(mcpConfigPath);
   const installedPackage = await readJsonIfExists(path.join(extensionDir, "package.json"));
+  const runningFromInstalledRuntime = await sameFilesystemPath(root, extensionDir);
+  function installedRuntimePackageCheck(remediation) {
+    if (runningFromInstalledRuntime) {
+      return check(
+        "Installed runtime package",
+        true,
+        "running from installed runtime; version sync check skipped",
+        "",
+        true
+      );
+    }
+    return check(
+      "Installed runtime package",
+      installedPackage.value?.version === packageJson.version,
+      installedPackage.value?.version || "missing",
+      remediation
+    );
+  }
   const copilotVersion = run("copilot", ["--version"], { env: profileEnv(options.home) });
   const jqVersion = run("jq", ["--version"], { env: profileEnv(options.home) });
   const goalctlSelfTest = run(process.execPath, [goalctlPath, "--self-test"], { env: profileEnv(options.home) });
@@ -141,7 +168,7 @@ async function main() {
   );
   const cliChecks = [
     check("Copilot CLI command", copilotVersion.ok, copilotVersion.stdout || copilotVersion.stderr || copilotVersion.error, "Install or repair GitHub Copilot CLI."),
-    check("Installed runtime package", installedPackage.value?.version === packageJson.version, installedPackage.value?.version || "missing", "Run ./install.sh --target cli."),
+    installedRuntimePackageCheck("Run ./install.sh --target cli."),
     check("Local goalctl command", await exists(goalctlPath), goalctlPath, "Run ./install.sh --target cli."),
     check("goalctl self-test", goalctlSelfTest.ok, goalctlSelfTest.stdout || goalctlSelfTest.stderr || goalctlSelfTest.error, "Run ./install.sh --target cli."),
     check("Goal skill file", await exists(path.join(copilotRoot, "skills", "goal", "SKILL.md")), path.join(copilotRoot, "skills", "goal", "SKILL.md"), "Run ./install.sh --target cli."),
@@ -154,14 +181,14 @@ async function main() {
     check("No stale wrapped drift hooks", staleCliDriftHookEvents.length === 0, staleCliDriftHookEvents.join(", ") || "none", "Run ./install.sh --target cli to normalize goal hook entries."),
   ];
   const vscodeChecks = [
-    check("Installed runtime package", installedPackage.value?.version === packageJson.version, installedPackage.value?.version || "missing", "Run ./install.sh --target all."),
+    installedRuntimePackageCheck("Run ./install.sh --target all."),
     check("Local goalctl command", await exists(goalctlPath), goalctlPath, "Run ./install.sh --target vscode-chat."),
     check("goalctl self-test", goalctlSelfTest.ok, goalctlSelfTest.stdout || goalctlSelfTest.stderr || goalctlSelfTest.error, "Run ./install.sh --target vscode-chat."),
     check("VS Code Chat custom agent", await exists(path.join(copilotRoot, "agents", "goal-system.agent.md")), path.join(copilotRoot, "agents", "goal-system.agent.md"), "Run ./install.sh --target vscode-chat."),
     check("VS Code Chat hook config", await exists(path.join(copilotRoot, "hooks", "goal-system-vscode.json")), path.join(copilotRoot, "hooks", "goal-system-vscode.json"), "Run ./install.sh --target vscode-chat."),
   ];
   const mcpChecks = [
-    check("Installed runtime package", installedPackage.value?.version === packageJson.version, installedPackage.value?.version || "missing", "Run ./install.sh --target mcp."),
+    installedRuntimePackageCheck("Run ./install.sh --target mcp."),
     check("MCP server file", await exists(mcpServerPath), mcpServerPath, "Run ./install.sh --target mcp."),
     check("MCP server self-test", mcpServerSelfTest.ok, mcpServerSelfTest.stdout || mcpServerSelfTest.stderr || mcpServerSelfTest.error, "Run ./install.sh --target mcp."),
     check("MCP config JSON", mcpConfig.exists && !mcpConfig.error, mcpConfig.error || mcpConfigPath, "Fix malformed mcp-config.json before reinstalling."),
@@ -207,7 +234,7 @@ async function main() {
   process.stdout.write(`Target: ${report.target}\n`);
   process.stdout.write(`Home: ${report.home}\n\n`);
   for (const item of checks) {
-    process.stdout.write(`[${item.ok ? "OK" : "ISSUE"}] ${item.label}`);
+    process.stdout.write(`[${item.info ? "INFO" : item.ok ? "OK" : "ISSUE"}] ${item.label}`);
     if (item.details) process.stdout.write(`: ${item.details}`);
     process.stdout.write("\n");
     if (!item.ok && item.remediation) process.stdout.write(`  Fix: ${item.remediation}\n`);

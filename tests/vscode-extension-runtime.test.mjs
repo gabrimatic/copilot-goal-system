@@ -21,8 +21,11 @@ Module._load = function patchedLoad(request, parent, isMain) {
   if (request === "vscode") return { workspace: { getConfiguration: () => ({ get: () => undefined }) }, window: {}, commands: {}, env: {}, Uri: {}, StatusBarAlignment: { Left: 1 } };
   return originalLoad.call(this, request, parent, isMain);
 };
-const { surfaceSummary } = require("../vscode-extension/extension.cjs");
+const { surfaceSummary, resolveCopilotRoot, acquireInstallLock } = require("../vscode-extension/extension.cjs");
 Module._load = originalLoad;
+const fsp = require("node:fs/promises");
+const os = require("node:os");
+const path = require("node:path");
 
 test("runtimeVersionState requires install when runtime package is missing", () => {
   assert.deepEqual(
@@ -65,6 +68,48 @@ test("runtimeVersionState accepts matching installed and bundled versions", () =
       installed: true,
       needsUpdate: false,
       status: "current",
+    },
+  );
+});
+
+test("runtimeVersionState reports newer instead of stale when installed runtime is ahead of the extension bundle", () => {
+  assert.deepEqual(
+    runtimeVersionState({
+      bundledVersion: "1.1.20",
+      installedPackagePresent: true,
+      installedVersion: "1.1.22",
+    }),
+    {
+      installed: true,
+      needsUpdate: false,
+      status: "newer",
+    },
+  );
+});
+
+test("runtimeVersionState compares versions numerically, not lexicographically", () => {
+  assert.deepEqual(
+    runtimeVersionState({
+      bundledVersion: "1.2.0",
+      installedPackagePresent: true,
+      installedVersion: "1.10.0",
+    }),
+    {
+      installed: true,
+      needsUpdate: false,
+      status: "newer",
+    },
+  );
+  assert.deepEqual(
+    runtimeVersionState({
+      bundledVersion: "1.10.0",
+      installedPackagePresent: true,
+      installedVersion: "1.2.0",
+    }),
+    {
+      installed: true,
+      needsUpdate: true,
+      status: "stale",
     },
   );
 });
@@ -178,4 +223,81 @@ test("surface status cannot report adapters ready when runtime is missing", () =
     mcp: "Not installed",
     recommended: false,
   });
+});
+
+test("resolveCopilotRoot lets homeOverride win over an ambient COPILOT_HOME", () => {
+  const withoutOverride = resolveCopilotRoot("", { COPILOT_HOME: "/y" }, "/x/osHome");
+  assert.deepEqual(withoutOverride, {
+    home: "/x/osHome",
+    copilotRoot: "/y",
+    overridden: false,
+  });
+
+  const withOverride = resolveCopilotRoot("/x/altprofile", { COPILOT_HOME: "/y" }, "/x/osHome");
+  assert.deepEqual(withOverride, {
+    home: "/x/altprofile",
+    copilotRoot: "/x/altprofile/.copilot",
+    overridden: true,
+  });
+});
+
+test("resolveCopilotRoot expands ~ and ~/ in homeOverride against the OS home directory", () => {
+  const tilde = resolveCopilotRoot("~", { COPILOT_HOME: "/y" }, "/x/osHome");
+  assert.deepEqual(tilde, {
+    home: "/x/osHome",
+    copilotRoot: "/x/osHome/.copilot",
+    overridden: true,
+  });
+
+  const tildeSlash = resolveCopilotRoot("~/altprofile", { COPILOT_HOME: "/y" }, "/x/osHome");
+  assert.deepEqual(tildeSlash, {
+    home: "/x/osHome/altprofile",
+    copilotRoot: "/x/osHome/altprofile/.copilot",
+    overridden: true,
+  });
+});
+
+test("resolveCopilotRoot falls back to the OS home directory's .copilot when no override or ambient COPILOT_HOME exists", () => {
+  const result = resolveCopilotRoot("", {}, "/x/osHome");
+  assert.deepEqual(result, {
+    home: "/x/osHome",
+    copilotRoot: "/x/osHome/.copilot",
+    overridden: false,
+  });
+});
+
+test("acquireInstallLock blocks a second concurrent install and releases on removal", async () => {
+  const tmpRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "goal-install-lock-"));
+  try {
+    const copilotRoot = path.join(tmpRoot, ".copilot");
+    const firstLock = await acquireInstallLock(copilotRoot);
+    assert.equal(typeof firstLock, "string");
+
+    const secondLock = await acquireInstallLock(copilotRoot);
+    assert.equal(secondLock, null);
+
+    await fsp.rm(firstLock, { force: true });
+    const thirdLock = await acquireInstallLock(copilotRoot);
+    assert.equal(typeof thirdLock, "string");
+  } finally {
+    await fsp.rm(tmpRoot, { recursive: true, force: true });
+  }
+});
+
+test("acquireInstallLock reclaims a stale lock file older than the freshness window", async () => {
+  const tmpRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "goal-install-lock-stale-"));
+  try {
+    const copilotRoot = path.join(tmpRoot, ".copilot");
+    const lockFile = path.join(copilotRoot, "extensions", ".goal-system.install.lock");
+    await fsp.mkdir(path.dirname(lockFile), { recursive: true });
+    await fsp.writeFile(lockFile, "111");
+    const staleTime = new Date(Date.now() - 11 * 60 * 1000);
+    await fsp.utimes(lockFile, staleTime, staleTime);
+
+    const reclaimed = await acquireInstallLock(copilotRoot);
+    assert.equal(typeof reclaimed, "string");
+    assert.equal(reclaimed, lockFile);
+  } finally {
+    await fsp.rm(tmpRoot, { recursive: true, force: true });
+  }
 });

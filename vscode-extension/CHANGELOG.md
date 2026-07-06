@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.23
+
+- Makes the `homeOverride` setting win over an ambient `COPILOT_HOME` environment variable for status, install, and spawned installer processes.
+- Prevents concurrent installs: the install command now bails when a run is in progress and uses a cross-window lock file around the shared install target.
+- Stops offering downgrades after an extension rollback: runtime version checks compare versions numerically and treat a newer installed runtime as up to date.
+- Removes the confirmation dialog from the read-only goal status tool and ships a leaner bundled runtime that includes the E2E prompt without full test suites or docs source.
+- Bundles the hardened goal runtime from 1.1.23: cross-process goal-state locking, a stricter completion gate, broader secret redaction, and stop-hook loop protection.
+
 ## 1.1.22
 
 - Adds the bundled MCP stdio server and installs it into Copilot CLI as `mcpServers.goalSystem` during Recommended Setup.

@@ -13,7 +13,7 @@ on:
           - "false"
   push:
     tags:
-      - "v*"
+      - "v[0-9]+.[0-9]+.[0-9]+"
 
 permissions:
   contents: read
@@ -31,6 +31,14 @@ jobs:
             package-lock.json
             vscode-extension/package-lock.json
       - run: jq --version
+      - name: Verify pushed tag matches the extension version
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          version="$(node -p "require('./vscode-extension/package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "Pushed tag $GITHUB_REF_NAME does not match vscode-extension/package.json version v$version." >&2
+            exit 1
+          fi
       - run: npm ci
       - run: npm run verify
       - run: npm --prefix vscode-extension ci

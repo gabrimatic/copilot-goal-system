@@ -13,7 +13,6 @@ const runtimeEntries = [
   "README.md",
   "SECURITY.md",
   "SUPPORT.md",
-  "doc",
   "extension.mjs",
   "hooks.json",
   "hooks",
@@ -26,14 +25,16 @@ const runtimeEntries = [
   "plugin.json",
   "scripts",
   "skills",
-  "tests",
+  "tests/prompts",
 ];
 
 function isBundledRuntimePath(source, projectRoot) {
   const relative = path.relative(projectRoot, source);
   if (!relative) return true;
   if (relative.startsWith("..") || path.isAbsolute(relative)) return false;
-  return runtimeEntries.some((entry) => relative === entry || relative.startsWith(entry + path.sep));
+  return runtimeEntries.some(
+    (entry) => relative === entry || relative.startsWith(entry + path.sep) || entry.startsWith(relative + path.sep)
+  );
 }
 
 module.exports = {
