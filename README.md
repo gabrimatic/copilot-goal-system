@@ -57,10 +57,10 @@ cd copilot-goal-system
 ./install.sh
 ```
 
-Install from the published docs site:
+Install with one command:
 
 ```bash
-curl -fsSL https://gabrimatic.github.io/copilot-goal-system/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/gabrimatic/copilot-goal-system/main/install.sh | bash
 ```
 
 Piped this way, `install.sh` downloads the repository archive to a temporary directory and runs the real installer from there; cloned or downloaded checkouts run the installer directly instead. `./install.sh` installs the Copilot CLI adapter by default. Use `./install.sh --target all` to install CLI, MCP, and VS Code Chat support.
