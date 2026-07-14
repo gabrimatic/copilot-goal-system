@@ -389,9 +389,9 @@ acquire_lock() {
     attempt=$((attempt + 1))
     if [[ -f "$lock_file" ]]; then
       local lock_mtime now_epoch
-      lock_mtime=$(stat -f %m "$lock_file" 2>/dev/null || stat -c %Y "$lock_file" 2>/dev/null || printf '')
+      lock_mtime=$(stat -c %Y "$lock_file" 2>/dev/null || stat -f %m "$lock_file" 2>/dev/null || printf '')
       now_epoch=$(date +%s)
-      if [[ -n "$lock_mtime" ]] && (( now_epoch - lock_mtime > 10 )); then
+      if [[ "$lock_mtime" =~ ^[0-9]+$ ]] && (( now_epoch - lock_mtime > 10 )); then
         rm -f "$lock_file" 2>/dev/null || true
         continue
       fi
