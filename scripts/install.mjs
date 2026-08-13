@@ -179,6 +179,25 @@ async function sameFilesystemPath(left, right) {
   return leftReal === rightReal;
 }
 
+async function replaceFile(sourcePath, destinationPath, mode) {
+  await mkdir(path.dirname(destinationPath), { recursive: true });
+  if (await sameFilesystemPath(sourcePath, destinationPath)) return;
+
+  const tempPath = `${destinationPath}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    await copyFile(sourcePath, tempPath);
+    if (mode !== undefined) await chmod(tempPath, mode);
+    if (await exists(destinationPath)) {
+      await chmod(destinationPath, fsConstants.S_IRUSR | fsConstants.S_IWUSR).catch(() => { });
+    }
+    await rm(destinationPath, { force: true });
+    await rename(tempPath, destinationPath);
+  } catch (error) {
+    await rm(tempPath, { force: true }).catch(() => { });
+    throw error;
+  }
+}
+
 async function exists(filePath) {
   try {
     await access(filePath);
@@ -338,9 +357,12 @@ async function installFiles() {
   await mkdir(hookDir, { recursive: true });
   await mkdir(agentDir, { recursive: true });
 
-  await copyFile(path.join(root, "skills", "goal", "SKILL.md"), path.join(skillDir, "SKILL.md"));
-  await copyFile(path.join(root, "hooks", "goal-context.sh"), path.join(hookDir, "goal-context.sh"));
-  await chmod(path.join(hookDir, "goal-context.sh"), fsConstants.S_IRWXU | fsConstants.S_IRGRP | fsConstants.S_IXGRP | fsConstants.S_IROTH | fsConstants.S_IXOTH);
+  await replaceFile(path.join(root, "skills", "goal", "SKILL.md"), path.join(skillDir, "SKILL.md"));
+  await replaceFile(
+    path.join(root, "hooks", "goal-context.sh"),
+    path.join(hookDir, "goal-context.sh"),
+    fsConstants.S_IRWXU | fsConstants.S_IRGRP | fsConstants.S_IXGRP | fsConstants.S_IROTH | fsConstants.S_IXOTH
+  );
 }
 
 async function chmodRuntimeExecutables(runtimeDir) {
