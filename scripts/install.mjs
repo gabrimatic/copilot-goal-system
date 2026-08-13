@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { access, chmod, copyFile, cp, mkdir, readFile, realpath, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { createRequire } from "node:module";
@@ -10,9 +10,8 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
 const { parseJsoncText, updateJsoncPath } = require("../lib/jsonc-file.cjs");
-const { isBundledRuntimePath } = require("../lib/runtime-bundle.cjs");
+const { runtimeEntries } = require("../lib/runtime-bundle.cjs");
 const { copilotRootForHome } = require("../lib/copilot-paths.cjs");
-const { hookInstalled } = require("../lib/install-status.cjs");
 const home = os.homedir();
 const copilotRoot = copilotRootForHome(home);
 const extensionDir = path.join(copilotRoot, "extensions", "goal-system");
@@ -105,7 +104,7 @@ async function recoverInvalidJsonObjectDocument(filePath, raw, description, reas
   await writeTextAtomic(filePath, "{}\n", { backup: false });
   process.stderr.write(
     `${filePath} could not be used as ${description}: ${trimmedReason}. ` +
-      `Backed up the original file to ${backupPath} and recreated a clean JSON object.\n`
+    `Backed up the original file to ${backupPath} and recreated a clean JSON object.\n`
   );
   return { raw: "{}\n", value: {}, exists: true, recovered: true, backupPath };
 }
@@ -180,6 +179,25 @@ async function sameFilesystemPath(left, right) {
   return leftReal === rightReal;
 }
 
+async function replaceFile(sourcePath, destinationPath, mode) {
+  await mkdir(path.dirname(destinationPath), { recursive: true });
+  if (await sameFilesystemPath(sourcePath, destinationPath)) return;
+
+  const tempPath = `${destinationPath}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    await copyFile(sourcePath, tempPath);
+    if (mode !== undefined) await chmod(tempPath, mode);
+    if (await exists(destinationPath)) {
+      await chmod(destinationPath, fsConstants.S_IRUSR | fsConstants.S_IWUSR).catch(() => { });
+    }
+    await rm(destinationPath, { force: true });
+    await rename(tempPath, destinationPath);
+  } catch (error) {
+    await rm(tempPath, { force: true }).catch(() => { });
+    throw error;
+  }
+}
+
 async function exists(filePath) {
   try {
     await access(filePath);
@@ -244,7 +262,7 @@ async function mergeSettingsHooks() {
   await mkdir(copilotRoot, { recursive: true });
   const settingsDocument = await readEditableJsonObjectDocument(settingsPath, "Copilot CLI settings");
   const settings = settingsDocument.value;
-  settings.hooks = settings.hooks && typeof settings.hooks === "object" && !Array.isArray(settings.hooks) ? settings.hooks : {};
+  settings.hooks = settings.hooks && typeof settings.hooks === "object" ? settings.hooks : {};
   removeStaleCliDriftHooks(settings);
 
   for (const [eventName, goalHooks] of Object.entries(hookEvents())) {
@@ -278,19 +296,6 @@ async function mergeSettingsHooks() {
   }
 
   await writeTextAtomic(settingsPath, updateJsoncPath(settingsDocument.raw, ["hooks"], settings.hooks));
-  await verifySettingsHooksWritten();
-}
-
-async function verifySettingsHooksWritten() {
-  const raw = await readFile(settingsPath, "utf8");
-  const written = parseJsoncText(raw, "Copilot CLI settings");
-  const missingEvents = Object.keys(hookEvents()).filter((eventName) => !hookInstalled(written, eventName));
-  if (missingEvents.length > 0) {
-    throw new Error(
-      `${settingsPath} is missing goal-system hook entries for: ${missingEvents.join(", ")} after writing. ` +
-        `Check for a malformed or unexpected "hooks" value (for example an array) and rerun ./install.sh --target cli.`
-    );
-  }
 }
 
 async function appendInstructionsSnippet() {
@@ -302,24 +307,11 @@ async function appendInstructionsSnippet() {
     if (error.code !== "ENOENT") throw error;
   }
 
-  const snippet = (await readFile(path.join(root, "instructions", "copilot-instructions.goal-snippet.md"), "utf8")).trim();
+  if (existing.includes(markerStart)) return;
 
-  const markerStartIndex = existing.indexOf(markerStart);
-  if (markerStartIndex === -1) {
-    const next = `${existing.trimEnd()}\n\n${markerStart}\n${snippet}\n${markerEnd}\n`;
-    await writeTextAtomic(instructionsPath, next, { backup: Boolean(existing) });
-    return;
-  }
-
-  const afterStart = markerStartIndex + markerStart.length;
-  const markerEndIndex = existing.indexOf(markerEnd, afterStart);
-  const between = markerEndIndex === -1 ? existing.slice(afterStart) : existing.slice(afterStart, markerEndIndex);
-  if (markerEndIndex !== -1 && between.trim() === snippet) return;
-
-  const before = existing.slice(0, afterStart);
-  const after = markerEndIndex === -1 ? "" : existing.slice(markerEndIndex + markerEnd.length);
-  const next = `${before}\n${snippet}\n${markerEnd}${after}`;
-  await writeTextAtomic(instructionsPath, next);
+  const snippet = await readFile(path.join(root, "instructions", "copilot-instructions.goal-snippet.md"), "utf8");
+  const next = `${existing.trimEnd()}\n\n${markerStart}\n${snippet.trim()}\n${markerEnd}\n`;
+  await writeTextAtomic(instructionsPath, next, { backup: Boolean(existing) });
 }
 
 async function installFiles() {
@@ -330,15 +322,12 @@ async function installFiles() {
     let previousMoved = false;
     let tempInstalled = false;
     try {
-      await cp(root, tempExtensionDir, {
-        recursive: true,
-        force: true,
-        filter: (source) => {
-          const relative = path.relative(root, source);
-          if (relative === "vscode-extension") return false;
-          return isBundledRuntimePath(source, root);
-        },
-      });
+      await mkdir(tempExtensionDir, { recursive: true });
+      for (const entry of runtimeEntries) {
+        const source = path.join(root, entry);
+        if (!(await exists(source))) continue;
+        await cp(source, path.join(tempExtensionDir, entry), { recursive: true, force: true });
+      }
       await installDependencies(tempExtensionDir);
       await chmodRuntimeExecutables(tempExtensionDir);
       if (await exists(extensionDir)) {
@@ -348,14 +337,14 @@ async function installFiles() {
       await rename(tempExtensionDir, extensionDir);
       tempInstalled = true;
       if (previousMoved) {
-        await rm(previousExtensionDir, { recursive: true, force: true }).catch(() => {});
+        await rm(previousExtensionDir, { recursive: true, force: true }).catch(() => { });
       }
     } catch (error) {
       if (!tempInstalled) {
-        await rm(tempExtensionDir, { recursive: true, force: true }).catch(() => {});
+        await rm(tempExtensionDir, { recursive: true, force: true }).catch(() => { });
       }
       if (previousMoved && !(await exists(extensionDir))) {
-        await rename(previousExtensionDir, extensionDir).catch(() => {});
+        await rename(previousExtensionDir, extensionDir).catch(() => { });
       }
       throw error;
     }
@@ -368,9 +357,12 @@ async function installFiles() {
   await mkdir(hookDir, { recursive: true });
   await mkdir(agentDir, { recursive: true });
 
-  await copyFile(path.join(root, "skills", "goal", "SKILL.md"), path.join(skillDir, "SKILL.md"));
-  await copyFile(path.join(root, "hooks", "goal-context.sh"), path.join(hookDir, "goal-context.sh"));
-  await chmod(path.join(hookDir, "goal-context.sh"), fsConstants.S_IRWXU | fsConstants.S_IRGRP | fsConstants.S_IXGRP | fsConstants.S_IROTH | fsConstants.S_IXOTH);
+  await replaceFile(path.join(root, "skills", "goal", "SKILL.md"), path.join(skillDir, "SKILL.md"));
+  await replaceFile(
+    path.join(root, "hooks", "goal-context.sh"),
+    path.join(hookDir, "goal-context.sh"),
+    fsConstants.S_IRWXU | fsConstants.S_IRGRP | fsConstants.S_IXGRP | fsConstants.S_IROTH | fsConstants.S_IXOTH
+  );
 }
 
 async function chmodRuntimeExecutables(runtimeDir) {
@@ -392,14 +384,51 @@ async function installDependencies(runtimeDir) {
     return;
   }
 
-  const result = spawnSync("npm", ["ci", "--omit=dev", "--ignore-scripts", "--no-audit", "--fund=false", "--prefer-offline"], {
+  const packageLockPath = path.join(runtimeDir, "package-lock.json");
+  if (!(await exists(packageLockPath))) {
+    throw new Error(`Runtime bundle is missing package-lock.json: ${packageLockPath}`);
+  }
+
+  const npmArgs = ["ci", "--omit=dev", "--ignore-scripts", "--no-audit", "--fund=false", "--prefer-offline"];
+  const spawnOptions = {
     cwd: runtimeDir,
     stdio: "inherit",
-  });
+    env: process.env,
+  };
+  let result;
 
-  if (result.error?.code === "ENOENT") {
-    throw new Error("npm not found. Install Node.js/npm, then rerun ./install.sh.");
+  async function runCommand(command, args, options) {
+    console.log(`Running command: ${command} ${args.join(" ")}`);
+    if (!(await exists(options.cwd))) {
+      throw new Error(`Command working directory does not exist: ${options.cwd}`);
+    }
+    if (path.isAbsolute(command) && !(await exists(command))) {
+      throw new Error(`Command executable does not exist: ${command}`);
+    }
+
+    return new Promise((resolve, reject) => {
+      const child = spawn(command, args, options);
+      child.once("error", reject);
+      child.once("close", (code, signal) => resolve({ status: code, signal }));
+    });
   }
+
+  if (process.platform === "win32") {
+    const npmCliPath = path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
+    if (await exists(npmCliPath)) {
+      console.log(`Using npm-cli.js at ${npmCliPath} to run npm ci`);
+      result = await runCommand(process.execPath, [npmCliPath, ...npmArgs], spawnOptions);
+    } else {
+      console.log(`npm-cli.js not found at ${npmCliPath}, falling back to npm.cmd`);
+      const npmCommand = ["npm.cmd", ...npmArgs].join(" ");
+      const commandProcessor = process.env.ComSpec || "C:\\Windows\\System32\\cmd.exe";
+      result = await runCommand(commandProcessor, ["/d", "/s", "/c", npmCommand], spawnOptions);
+    }
+  } else {
+    result = await runCommand("npm", npmArgs, spawnOptions);
+  }
+
+  console.log(`npm ci exited with \ncode ${result.status} \nsignal ${result.signal}\n`);
 
   if (result.status !== 0) {
     throw new Error(`npm ci failed in ${runtimeDir}`);
@@ -407,22 +436,8 @@ async function installDependencies(runtimeDir) {
 }
 
 async function installVscodeChatAdapter() {
-  const rawHookConfig = await readFile(path.join(root, "adapters", "vscode-chat", "hooks", "goal-system.json"), "utf8");
-  const hookConfig = parseJsoncText(rawHookConfig, "VS Code Chat hook config");
-  const hookRunnerCommand = `node ${JSON.stringify(path.join(extensionDir, "adapters", "vscode-chat", "hook-runner.mjs"))}`;
-  for (const hooks of Object.values(hookConfig.hooks || {})) {
-    if (!Array.isArray(hooks)) continue;
-    for (const hook of hooks) {
-      if (!hook || typeof hook !== "object") continue;
-      if (typeof hook.command === "string" && hook.command.includes("hook-runner.mjs")) {
-        hook.command = hookRunnerCommand;
-      }
-      if (typeof hook.windows === "string" && hook.windows.includes("hook-runner.mjs")) {
-        hook.windows = hookRunnerCommand;
-      }
-    }
-  }
-  await writeTextAtomic(vscodeHookConfigPath, `${JSON.stringify(hookConfig, null, 2)}\n`);
+  const hookConfig = await readFile(path.join(root, "adapters", "vscode-chat", "hooks", "goal-system.json"), "utf8");
+  await writeTextAtomic(vscodeHookConfigPath, hookConfig.endsWith("\n") ? hookConfig : `${hookConfig}\n`);
 
   const agent = await readFile(path.join(root, "adapters", "vscode-chat", "agents", "goal-system.agent.md"), "utf8");
   await writeTextAtomic(vscodeAgentPath, agent.endsWith("\n") ? agent : `${agent}\n`);
